@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<!-- Basic Metas -->
+	<meta charset="utf-8">
+	<title>Comparing two ways to modelize convex optimization problems | François Pacaud</title>
+	<meta name="description" content="Underlying the difference between disciplined convex programming and pure NLP methods.">
+	<meta name="author" content="">
+	<link rel="author" href=""/>
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+	<!-- Twitter Cards and Open Graph -->
+	<meta name="twitter:card" content="summary">
+	<meta name="twitter:creator" content="">
+	<meta name="twitter:domain" content="">
+	<meta name="twitter:site" content="">
+	<meta property="og:title" content="Comparing two ways to modelize convex optimization problems">
+	<meta property="og:description" content="Underlying the difference between disciplined convex programming and pure NLP methods.">
+	<meta property="og:image" content="frapac.github.io/images/icons/avatar.png">
+	<meta property="og:type" content="article">
+	<meta property="og:url" content="frapac.github.io/drafts/modernopt.html">
+
+	<!-- Stylesheets and Web Fonts -->
+	<link href="/theme/style.min.css?1dcaa86e" rel="stylesheet">
+	<link href="https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet">
+
+	<!-- Favicons -->
+	<link rel="apple-touch-icon" href="/images/icons/apple-touch-icon.png">
+	<link rel="apple-touch-icon" sizes="57x57" href="/images/icons/apple-touch-icon-57x57.png">
+	<link rel="apple-touch-icon" sizes="60x60" href="/images/icons/apple-touch-icon-60x60.png">
+	<link rel="apple-touch-icon" sizes="72x72" href="/images/icons/apple-touch-icon-72x72.png">
+	<link rel="apple-touch-icon" sizes="76x76" href="/images/icons/apple-touch-icon-76x76.png">
+	<link rel="apple-touch-icon" sizes="114x114" href="/images/icons/apple-touch-icon-114x114.png">
+	<link rel="apple-touch-icon" sizes="120x120" href="/images/icons/apple-touch-icon-120x120.png">
+	<link rel="apple-touch-icon" sizes="144x144" href="/images/icons/apple-touch-icon-144x144.png">
+	<link rel="apple-touch-icon" sizes="152x152" href="/images/icons/apple-touch-icon-152x152.png">
+	<link rel="apple-touch-icon" sizes="180x180" href="/images/icons/apple-touch-icon-180x180.png">
+
+	<link rel="icon" type="image/png" href="/images/icons/favicon-16x16.png" sizes="16x16">
+	<link rel="icon" type="image/png" href="/images/icons/favicon-32x32.png" sizes="32x32">
+	<link rel="icon" type="image/png" href="/images/icons/favicon-96x96.png" sizes="96x96">
+	<link rel="icon" type="image/png" href="/images/icons/favicon-160x160.png" sizes="160x160">
+	<link rel="icon" type="image/png" href="/images/icons/favicon-196x196.png" sizes="196x196">
+
+	<meta name="theme-color" content="">
+
+	<meta name="msapplication-TileColor" content="">
+	<meta name="msapplication-TileImage" content="/images/icons/mstile-144x144.png">
+	<meta name="msapplication-square70x70logo" content="/images/icons/mstile-small.png">
+	<meta name="msapplication-square150x150logo" content="/images/icons/mstile-medium.png">
+	<meta name="msapplication-wide310x150logo" content="/images/icons/mstile-wide.png">
+	<meta name="msapplication-square310x310logo" content="/images/icons/mstile-large.png">
+
+	<!--[if lt IE 9]>
+	<script src="/theme/js/html5shiv.min.js"></script>
+	<script src="/theme/js/respond.min.js"></script>
+	<![endif]-->
+</head>
+
+<body>
+	<div class="container">
+		<aside>
+			<a href="/"><img id="avatar" alt="Site Avatar" src="/images/icons/avatar.png"></a>
+			<div id="name"><a href="/">François Pacaud</a></div>
+			<div id="bio">Minimalism by design</div>
+
+			<div id="sidebar-links">
+				<a href="/pages/about/">About</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="/archive/">Archive</a>
+			</div>
+
+			<div id="social">
+				<a href="mailto:francoispacaud8+blog@gmail.com" title="Email (francoispacaud8+blog@gmail.com)" class="icon fa fa-envelope"></a>
+				<a href="http://github.com/frapac" title="GitHub" class="icon fa fa-github"></a>
+				<a href="https://scholar.google.fr/citations?user=W_KQN_sAAAAJ&hl=fr&oi=ao" title="Scholar" class="icon fa fa-flask"></a>
+				<a href="/atom.xml" title="Atom Feed" class="icon fa fa-rss"></a>
+			</div>
+            <hr>
+			<div id="sidebar-links">
+                <a href="/pages/articles/">Articles</a></br><a href="/pages/talks/">Talks</a></br><a href="/pages/teaching/">Teaching</a>
+			</div>
+            <hr>
+
+			<hr id="sidebar-divider">
+		</aside>
+
+		<article>
+	<h1 class="title"><a href="/drafts/modernopt.html" title="Permalink to Comparing two ways to modelize convex optimization problems">Comparing two ways to modelize convex optimization problems</a></h1>
+	<time class="date" datetime="2019-10-06 00:00:00+02:00">2019-10-06</time>
+	<div class="content">
+		<p>MOI
+CVXPY</p>
+<h2>The realm of non-linear programming</h2>
+<h3>A convex non-linear problem</h3>
+<p>Let <span class="math">\(n\)</span> and <span class="math">\(m\)</span> be positive integers, and <span class="math">\(\mathbb{R}\)</span> the set of
+real numbers.
+We aim at minimizing a <em>convex</em> real-valued function <span class="math">\(f: \mathbb{R}^n \to \mathbb{R}\)</span>
+subject to <span class="math">\(m\)</span> constraints writing <span class="math">\(g(x) \leq 0\)</span>, with
+<span class="math">\(g: \mathbb{R}^n \to \mathbb{R}^m\)</span> a given function (also supposed convex).
+The optimization problem writes:
+</p>
+<div class="math">$$
+    \min_{x \in \mathbb{R}^n} \; f(x) \\
+    s.t.  \quad g(x) \leq 0
+$$</div>
+<p>This problem is a convex non-linear programming (NLP) problem.
+Once the functio</p>
+<h3>The case of logistic regression</h3>
+<p>To illustrate our saying, we give a classical example: we consider
+the optimization problem that corresponds to the fitting of a logistic
+regression model.
+a logistic reg</p>
+<p>The loss (the objective, in optimization term) writes out
+</p>
+<div class="math">$$
+    \mathcal{J}(\theta) = \sum_{i=1}^N y_i \log{(1 + \exp{(-y_i \theta^\top x_i)})}
+$$</div>
+<p>
+We recognize a non-linear function, as we are summing logarithmic terms.</p>
+<h3>Specifying the problem to a NLP solver</h3>
+<p>The functions <span class="math">\(f\)</span> and <span class="math">\(g\)</span> depend on the modeling you want to provide
+to the solver, and are usually explicited by writing <em>callbacks</em>.</p>
+<p>The problem is often loaded once and for all inside the NLP solver, via
+a single call function that specify <em>in one pass</em> all the optimization
+structure to the solver:</p>
+<ul>
+<li>the number of variables <span class="math">\(n\)</span></li>
+<li>the number of constraints <span class="math">\(m\)</span></li>
+<li>the callbacks for the functions <span class="math">\(f\)</span> and <span class="math">\(g\)</span></li>
+</ul>
+<p>Indeed, that what appears if we look at the signatures of the established
+NLP solvers:</p>
+<ul>
+<li>Lbfgsb</li>
+<li>Ipopt</li>
+<li>Knitro</li>
+</ul>
+<p>This format was also adopted by the NLP library implemented in pure Julia,
+<a href="">Optim.jl</a>.</p>
+<h2>Convex analysis and conic optimization</h2>
+<p>Conic optimization has receive a growing interest in the previous decades,
+starting with the work of TODO.
+In convex analysis, a convex cone is defined as a subset of a vector space
+closed under linear combinations with positive coefficients.
+</p>
+<div class="math">$$
+x
+$$</div>
+<p>For a cone <span class="math">\(C \subset \mathbb{R}^n\)</span>, its dual cone is defined as
+</p>
+<div class="math">$$
+    C^* = \{ \lambda \in \mathbb{R}^n \; | \; &lt;x, \lambda&gt; \geq 0 \; \forall x \in C \}
+$$</div>
+<p>The idea of conic optimization is to build a optimization problem such that
+the variable <span class="math">\(x\)</span> is constrained to be inside a set of cones <span class="math">\(C = C_1 \times \cdots \times C_l\)</span>.
+Thus, a conic optimization problem writes out:
+</p>
+<div class="math">$$
+    \min_{x \in \mathbb{R}^n} \; c^\top x \\
+    s.t.  \quad x \in C_i  \quad \forall i = 1, \cdots, l \\
+    \,\,  \quad Ax = b
+$$</div>
+<h3>A (short) gallery of convex cones</h3>
+<p>Usual cones encompass</p>
+<ul>
+<li>The second-order cone:
+  <div class="math">$$
+    C_2 = \{ (t, x) \in \mathbb{R} \times \mathbb{R}^n \; |  \; t \geq ||x ||_2  \, , \; t &gt; 0 \}
+  $$</div>
+</li>
+<li>The semidefinite cone:
+  <div class="math">$$
+    \mathbb{S}_+^n = \{ X \in \mathbb{R}^{n \times n} \; | \; X^\top = X \, , \; \text{det}(X) &gt; 0 \}
+  $$</div>
+</li>
+<li>The power cone:
+  <div class="math">$$
+    C_{exp} =  \{ (t, x, y) \in \mathbb{R}^3 \; |  \; t \geq x \exp{(y/x)}  \, , \; t, x &gt; 0 \}
+  $$</div>
+</li>
+</ul>
+<p>Forcing the variable <span class="math">\(x\)</span> to belong to a given set of cones allow the solver
+to use dedicated algorithm to solve effectively the problem (e.g. interior
+points algorithms tailored for conic or SDP optimization).
+The more the solver is aware of the overall structure of the problem,
+the better the resolution.</p>
+<h3>Coming back to the logistic regression</h3>
+<p>Let us reconsider our little logistic regression problem. It is well known
+that the objective function is convex. But that is not the end: the logistic
+regression problem reformulates also as a conic optimization problem.</p>
+<p>Indeed, we can prove that the optimization problem is equivalent to
+</p>
+<div class="math">$$
+    \min_{t, x} \; y^\top t + \lambda r \\
+    s.t. \quad t_i \geq - log(h(x))
+$$</div>
+<p>
+The constraint <span class="math">\(t \geq log(1 + exp(u))\)</span> reformulates in the
+following manner
+</p>
+<div class="math">$$
+    \begin{align}
+    t \geq log(1 + exp(u))  \iff &amp; exp(-t) + exp(u - t) \leq 1 \\
+                            \iff &amp; z_1 + z_2 \leq 1            \\
+                                 &amp; (z_1, 1, u-t ) \in C_{exp}  \\
+                                 &amp; (z_2, 1, -t )  \in C_{exp}
+    \end{align}
+$$</div>
+<p>Thus the equivalent optimization problem rewrites</p>
+<p>which is a perfectly well-shaped conic problem. :)</p>
+<h3>Specifying the structure to the optimization solvers</h3>
+<p>In conic optimization, on the contrary of most NLP solvers,
+the structure of the optimization problem is specified incrementally
+to the optimization solver.</p>
+<p>Second-order cone</p>
+<p>The exponential cone has been supported in Mosek since <a href="">Mosek 9.0</a>.
+<a href="https://github.com/oxfordcontrol/COSMO.jl">COSMO.jl</a>,
+a newly SDP solver relying on operator splitting methods, supports
+also the exponential cone.</p>
+<h2>Disciplined convex programming</h2>
+<p>The problem with conic optimization is that it requires some knowledge
+to reformulate in a proper manner generic constraints as valid
+conic inequalities.</p>
+<p>However, as I am not an expert in DCP, I refer to</p>
+<h2>A plea for mixing conic constraints</h2>
+<p>Reformulating generic non-linear constraints with conic inequalities
+often prove useful in term of performance, as it allows the solve to
+use appropriate methods during the resolving.</p>
+<p>The problem with conic optimization is that you have to provide to the
+solver explicit expressions for the objective <span class="math">\(f(x)\)</span> and the constraints <span class="math">\(g(x)\)</span>.
+However, in a lot of real world problems, the values <span class="math">\(f(x)\)</span> and <span class="math">\(g(x)\)</span>
+are only given via <em>callbacks</em> functions, which could call themselves
+complicated code (think about Monte Carlo simulation).
+</p>
+<div class="math">$$
+    \begin{align}
+        \min_{x \in \mathbb{R}^n} &amp;\; f(x) \\
+        s.t. &amp; \quad g(x) \leq 0 \\
+        &amp; \quad x \in C_i  \quad \forall i = 1, \cdots, l \\
+        &amp; \quad Ax = b
+    \end{align}
+$$</div>
+<h2>Sources</h2>
+<script type="text/javascript">if (!document.getElementById('mathjaxscript_pelican_#%@#$@#')) {
+    var align = "center",
+        indent = "0em",
+        linebreak = "false";
+
+    if (false) {
+        align = (screen.width < 768) ? "left" : align;
+        indent = (screen.width < 768) ? "0em" : indent;
+        linebreak = (screen.width < 768) ? 'true' : linebreak;
+    }
+
+    var mathjaxscript = document.createElement('script');
+    mathjaxscript.id = 'mathjaxscript_pelican_#%@#$@#';
+    mathjaxscript.type = 'text/javascript';
+    mathjaxscript.src = 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.3/latest.js?config=TeX-AMS-MML_HTMLorMML';
+
+    var configscript = document.createElement('script');
+    configscript.type = 'text/x-mathjax-config';
+    configscript[(window.opera ? "innerHTML" : "text")] =
+        "MathJax.Hub.Config({" +
+        "    config: ['MMLorHTML.js']," +
+        "    TeX: { extensions: ['AMSmath.js','AMSsymbols.js','noErrors.js','noUndefined.js'], equationNumbers: { autoNumber: 'none' } }," +
+        "    jax: ['input/TeX','input/MathML','output/HTML-CSS']," +
+        "    extensions: ['tex2jax.js','mml2jax.js','MathMenu.js','MathZoom.js']," +
+        "    displayAlign: '"+ align +"'," +
+        "    displayIndent: '"+ indent +"'," +
+        "    showMathMenu: true," +
+        "    messageStyle: 'normal'," +
+        "    tex2jax: { " +
+        "        inlineMath: [ ['\\\\(','\\\\)'] ], " +
+        "        displayMath: [ ['$$','$$'] ]," +
+        "        processEscapes: true," +
+        "        preview: 'TeX'," +
+        "    }, " +
+        "    'HTML-CSS': { " +
+        "        availableFonts: ['STIX', 'TeX']," +
+        "        preferredFont: 'STIX'," +
+        "        styles: { '.MathJax_Display, .MathJax .mo, .MathJax .mi, .MathJax .mn': {color: 'inherit ! important'} }," +
+        "        linebreaks: { automatic: "+ linebreak +", width: '90% container' }," +
+        "    }, " +
+        "}); " +
+        "if ('default' !== 'default') {" +
+            "MathJax.Hub.Register.StartupHook('HTML-CSS Jax Ready',function () {" +
+                "var VARIANT = MathJax.OutputJax['HTML-CSS'].FONTDATA.VARIANT;" +
+                "VARIANT['normal'].fonts.unshift('MathJax_default');" +
+                "VARIANT['bold'].fonts.unshift('MathJax_default-bold');" +
+                "VARIANT['italic'].fonts.unshift('MathJax_default-italic');" +
+                "VARIANT['-tex-mathit'].fonts.unshift('MathJax_default-italic');" +
+            "});" +
+            "MathJax.Hub.Register.StartupHook('SVG Jax Ready',function () {" +
+                "var VARIANT = MathJax.OutputJax.SVG.FONTDATA.VARIANT;" +
+                "VARIANT['normal'].fonts.unshift('MathJax_default');" +
+                "VARIANT['bold'].fonts.unshift('MathJax_default-bold');" +
+                "VARIANT['italic'].fonts.unshift('MathJax_default-italic');" +
+                "VARIANT['-tex-mathit'].fonts.unshift('MathJax_default-italic');" +
+            "});" +
+        "}";
+
+    (document.body || document.getElementsByTagName('head')[0]).appendChild(configscript);
+    (document.body || document.getElementsByTagName('head')[0]).appendChild(mathjaxscript);
+}
+</script>
+	</div>
+
+
+			<hr>
+		</article>
+
+		<footer>
+			<p>Powered by <a href="http://getpelican.com">Pelican</a> and <a href="http://pages.github.com">GitHub&nbsp;Pages</a>.</p>
+		</footer>
+	</div>
+
+
+</body>
+</html>
