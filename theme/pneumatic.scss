@@ -55,6 +55,11 @@ article p {
 	line-height: 1.8;
 }
 
+article a {
+	color: #222;
+	font-weight: 600;
+}
+
 h1, h2, h3 { font-weight: bold; }
 
 h1 {
@@ -215,11 +220,6 @@ code {
 	@extend h2;
 	margin: 12px 0;
 }
-
-div.math {
-	overflow-x: scroll;
-}
-
 
 // Layout
 
