@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<!-- Basic Metas -->
+	<meta charset="utf-8">
+	<title>Building a coauthorship network from a bibtex file | François Pacaud</title>
+	<meta name="description" content="How difficult is it to extract a coauthorship network from a bibtex file? An experience using HAL's API.">
+	<meta name="author" content="">
+	<link rel="author" href=""/>
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+	<!-- Twitter Cards and Open Graph -->
+	<meta name="twitter:card" content="summary">
+	<meta name="twitter:creator" content="">
+	<meta name="twitter:domain" content="">
+	<meta name="twitter:site" content="">
+	<meta property="og:title" content="Building a coauthorship network from a bibtex file">
+	<meta property="og:description" content="How difficult is it to extract a coauthorship network from a bibtex file? An experience using HAL's API.">
+	<meta property="og:image" content="frapac.github.io/images/icons/avatar.png">
+	<meta property="og:type" content="article">
+	<meta property="og:url" content="frapac.github.io/2020/06/0_coauthor_processing/">
+
+	<!-- Stylesheets and Web Fonts -->
+	<link href="/theme/style.min.css?baf22033" rel="stylesheet">
+	<link href="https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet">
+
+	<!-- Favicons -->
+	<link rel="apple-touch-icon" sizes="180x180" href="/images/icons/apple-touch-icon.png">
+	<link rel="icon" type="image/png" href="/images/icons/favicon-16x16.png" sizes="16x16">
+	<link rel="icon" type="image/png" href="/images/icons/favicon-32x32.png" sizes="32x32">
+	<meta name="theme-color" content="">
+
+	<meta name="msapplication-TileColor" content="">
+	<meta name="msapplication-TileImage" content="/images/icons/mstile-144x144.png">
+	<meta name="msapplication-square70x70logo" content="/images/icons/mstile-small.png">
+	<meta name="msapplication-square150x150logo" content="/images/icons/mstile-medium.png">
+	<meta name="msapplication-wide310x150logo" content="/images/icons/mstile-wide.png">
+	<meta name="msapplication-square310x310logo" content="/images/icons/mstile-large.png">
+
+	<!--[if lt IE 9]>
+	<script src="/theme/js/html5shiv.min.js"></script>
+	<script src="/theme/js/respond.min.js"></script>
+	<![endif]-->
+</head>
+
+<body>
+	<div class="container">
+		<aside>
+			<a href="/"><img id="avatar" alt="Site Avatar" src="/images/icons/avatar.png"></a>
+			<div id="name"><a href="/">François Pacaud</a></div>
+			<div id="bio">Minimalism by design</div>
+
+			<div id="sidebar-links">
+				<a href="/pages/about/">About</a>&nbsp;|&nbsp;<a href="/archive/">Archive</a>
+			</div>
+
+			<div id="social">
+				<a href="mailto:francoispacaud8+blog@gmail.com" title="Email (francoispacaud8+blog@gmail.com)" class="icon fa fa-envelope"></a>
+				<a href="http://github.com/frapac" title="GitHub" class="icon fa fa-github"></a>
+				<a href="https://scholar.google.fr/citations?user=W_KQN_sAAAAJ&hl=fr&oi=ao" title="Scholar" class="icon fa fa-flask"></a>
+				<a href="/atom.xml" title="Atom Feed" class="icon fa fa-rss"></a>
+			</div>
+            <hr>
+			<div id="sidebar-links">
+                <a href="/pages/articles/">Articles</a></br><a href="/pages/talks/">Talks</a></br><a href="/pages/teaching/">Teaching</a>
+			</div>
+            <hr>
+
+			<hr id="sidebar-divider">
+		</aside>
+
+		<article>
+	<h1 class="title"><a href="/2020/06/0_coauthor_processing/" title="Permalink to Building a coauthorship network from a bibtex file">Building a coauthorship network from a bibtex file</a></h1>
+	<time class="date" datetime="2020-06-17 00:00:00+02:00">2020-06-17</time>
+	<div class="content">
+		<p>Have you ever been interested in extracting the coauthorship network
+from your bibtex file?
+I acknowledge I have been always fascinated by the information we could
+extract just by analyzing the coauthorship relations in an
+academic community.</p>
+<p>Here, our primary interest is to analyze the relations existing in the optimization
+community in France. Indeed, as a member of this community, analyzing the existing
+patterns inside the coauthorship network is of particular
+interest to me. Furthermore, almost all academics in France publish their
+articles via <a href="https://hal.archives-ouvertes.fr/">HAL</a> (<em>Hyper Articles en Ligne</em>), which comes with
+a great API to extract data about the articles published.
+Thus, building a suitable database is almost straightforward in our case,
+as we will show later.
+This article explains how to
+build a coauthorship network from a large bibtex file, load it into <code>networkx</code>
+and export it to the <code>graphml</code> format. Note that all the code is available freely
+<a href="https://github.com/frapac/carnets/tree/master/blog/coauthors">on Github</a>.</p>
+<p>This article is the first step of a broader work. In future articles, we will
+show how to extract useful metrics to analyze the topology of the coauthorship
+network.</p>
+<h2>Importing a bibtex file from HAL</h2>
+<hr>
+<p>Querying <a href="https://api.archives-ouvertes.fr/">HAL's API</a> is not that difficult.
+Looking more closely at <a href="https://api.archives-ouvertes.fr/docs/search">the specifications</a>,
+it appears we have different
+choices available for the output format (XML, json, bibtex). So luckily, we could
+export the database directly in bibtex, exactly as we want!
+Using the bibtex format will help further the analysis, as we could
+looks at the coauthorship of each article just
+by looking at the <code>author</code> field in each entry.</p>
+<p>It remains now to build our query.
+The subdomain we are interested in is mathematical optimization,
+which corresponds to <code>math-oc</code> in HAL's specification. To select articles published
+in this subfield, we add a field <code>domain_s:1.math.math-oc</code> in our request.
+We set the return field to <code>wt=bibtex</code> to specify the output format.
+We should also specify the number of
+articles we want to import. By default, HAL returns only 30 articles.
+To output all the articles, we increase the limit to 10000
+(<code>rows=10000</code>).</p>
+<p>The final HTTP request writes out:</p>
+<div class="codehilite"><pre><span></span><code>wget -O raw_export.bib <span class="s2">&quot;https://api.archives-ouvertes.fr/search/?q=domain_s:1.math.math-oc&amp;wt=bibtex&amp;rows=10000&quot;</span>
+</code></pre></div>
+
+
+<p>Note that we could easily modify this query to import articles from a different
+subfield.</p>
+<p>Once the request finished, we get a valid bibtex database. Now it remains to check
+whether the database is clean enough ... and as you could guess, we will
+have to do some preprocessing before being able to parse correctly the
+database.</p>
+<h2>Preprocessing the bibtex file</h2>
+<hr>
+<p>Looking more closely at the bibtex file, it appears that we have two
+major problems.</p>
+<p>First, some entries are not well specified. To force LaTeX to parse an entry
+without additional reformatting, the authors could enter the fields in double
+brace:
+<code>{{Please parse this TitlE as specified Here!!}}</code>. This is a perfectly
+valid bibtex specification. But unfortunately some authors entered three
+braces <code>}}}</code> instead
+of the two required <code>}}</code>, leading to errors when parsing the bibtex file.
+We replaced the faulty braces manually.</p>
+<p>The other problem is the accentuation. Indeed, LaTeX (and by extension, bibtex)
+was designed back in a time when ASCII reigns. People with accentuated names could
+enter special characters inside a brace, e.g. <code>{\"i}</code> is equivalent
+to a <code>ï</code> symbol. In bibtex, almost all accentuated names are
+using this convention, which at first glance is perfectly fine. The problem
+arises as some names could be accentuated in some articles (<code>Valérie</code>),
+and entered without any accentuation in some other articles (<code>Valerie</code>). To
+avoid further issue, we choose to convert all accentuated characters in ASCII,
+by using the following <code>sed</code> commands (the complete command is available
+<a href="https://github.com/frapac/carnets/blob/master/blog/coauthors/parse.sh">in this script</a>):</p>
+<div class="codehilite"><pre><span></span><code><span class="nv">BIBFILE</span><span class="o">=</span>raw_export.bib
+sed -i -e <span class="s2">&quot;s/{\\\&#39;a}/a/g&quot;</span> <span class="se">\</span>
+    -e <span class="s2">&quot;s/{\\\&#39;e}/e/g&quot;</span> <span class="se">\</span>
+    -e <span class="s2">&quot;s/{\\\&#39;i}/i/g&quot;</span> <span class="se">\</span>
+    -e <span class="s2">&quot;s/{\\\&#39;n}/n/g&quot;</span> <span class="se">\</span>
+    -e <span class="s2">&quot;s/{\\\&#39;o}/o/g&quot;</span> <span class="se">\</span>
+    -e <span class="s2">&quot;s/{\\\&#39;u}/u/g&quot;</span> <span class="se">\</span>
+    .
+    .
+    .
+    -e <span class="s1">&#39;s/{\\ae}/ae/g&#39;</span> <span class="se">\</span>
+    -e <span class="s1">&#39;s/{\\ss}/ss/g&#39;</span> <span class="se">\</span>
+    <span class="nv">$BIBFILE</span>
+</code></pre></div>
+
+
+<p>I address my humble apologies to all people who I have ASCIIed the names
+without further notice... But hopefully, that would ease the next steps.</p>
+<h2>Loading the base into Python</h2>
+<hr>
+<p>Once the bibtex file processed, we could pass it to Python.
+To load the bibtex database in Python, we use the great package
+<a href="https://bibtexparser.readthedocs.org/">bibtexparser</a>. Using this package, importing the database is straightforward:</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">import</span> <span class="nn">bibtexparser</span>
+<span class="n">parser</span> <span class="o">=</span> <span class="n">bibtexparser</span><span class="o">.</span><span class="n">bparser</span><span class="o">.</span><span class="n">BibTexParser</span><span class="p">(</span><span class="n">common_strings</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">bibname</span><span class="p">)</span> <span class="k">as</span> <span class="n">bibtex_file</span><span class="p">:</span>
+    <span class="n">bib_database</span> <span class="o">=</span> <span class="n">bibtexparser</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">bibtex_file</span><span class="p">,</span> <span class="n">parser</span><span class="p">)</span>
+</code></pre></div>
+
+
+<p>We could get the total number of articles:</p>
+<div class="codehilite"><pre><span></span><code><span class="o">&gt;&gt;&gt;</span> <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Number of articles: &quot;</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">bib_database</span><span class="o">.</span><span class="n">entries</span><span class="p">))</span>
+<span class="n">Number</span> <span class="n">of</span> <span class="n">articles</span><span class="p">:</span>  <span class="mi">9197</span>
+</code></pre></div>
+
+
+<p>Let's do some basic data analysis on our database. For instance, when
+were the articles in our database published? We write a small Python
+function to count the number of articles per year:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">def</span> <span class="nf">hist_years</span><span class="p">(</span><span class="n">db</span><span class="p">):</span>
+    <span class="n">counts</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">entrie</span> <span class="ow">in</span> <span class="n">db</span><span class="o">.</span><span class="n">entries</span><span class="p">:</span>
+        <span class="n">year</span> <span class="o">=</span> <span class="n">entrie</span><span class="p">[</span><span class="s2">&quot;year&quot;</span><span class="p">]</span>
+        <span class="n">counts</span><span class="p">[</span><span class="n">year</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">+</span> <span class="n">counts</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">year</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="n">years</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">counts</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+    <span class="n">years</span><span class="o">.</span><span class="n">sort</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">year</span> <span class="ow">in</span> <span class="n">years</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="si">%s</span><span class="s2">: </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="p">(</span><span class="n">year</span><span class="p">,</span> <span class="n">counts</span><span class="p">[</span><span class="n">year</span><span class="p">]))</span>
+    <span class="k">return</span> <span class="n">counts</span>
+</code></pre></div>
+
+
+<p>We get</p>
+<div class="codehilite"><pre><span></span><code>&gt;&gt;&gt; hist_years<span class="o">(</span>bib_database<span class="o">)</span>
+<span class="m">0008</span>: <span class="m">1</span>
+<span class="m">1978</span>: <span class="m">1</span>
+<span class="m">1979</span>: <span class="m">1</span>
+<span class="m">1981</span>: <span class="m">1</span>
+<span class="m">1983</span>: <span class="m">3</span>
+<span class="m">1984</span>: <span class="m">3</span>
+<span class="m">1986</span>: <span class="m">1</span>
+<span class="m">1987</span>: <span class="m">2</span>
+<span class="m">1988</span>: <span class="m">3</span>
+<span class="m">1989</span>: <span class="m">3</span>
+<span class="m">1990</span>: <span class="m">8</span>
+<span class="m">1991</span>: <span class="m">4</span>
+<span class="m">1992</span>: <span class="m">7</span>
+<span class="m">1993</span>: <span class="m">14</span>
+<span class="m">1994</span>: <span class="m">31</span>
+<span class="m">1995</span>: <span class="m">17</span>
+<span class="m">1996</span>: <span class="m">31</span>
+<span class="m">1997</span>: <span class="m">32</span>
+<span class="m">1998</span>: <span class="m">37</span>
+<span class="m">1999</span>: <span class="m">39</span>
+<span class="m">2000</span>: <span class="m">57</span>
+<span class="m">2001</span>: <span class="m">48</span>
+<span class="m">2002</span>: <span class="m">60</span>
+<span class="m">2003</span>: <span class="m">76</span>
+<span class="m">2004</span>: <span class="m">101</span>
+<span class="m">2005</span>: <span class="m">116</span>
+<span class="m">2006</span>: <span class="m">260</span>
+<span class="m">2007</span>: <span class="m">286</span>
+<span class="m">2008</span>: <span class="m">300</span>
+<span class="m">2009</span>: <span class="m">371</span>
+<span class="m">2010</span>: <span class="m">444</span>
+<span class="m">2011</span>: <span class="m">508</span>
+<span class="m">2012</span>: <span class="m">552</span>
+<span class="m">2013</span>: <span class="m">685</span>
+<span class="m">2014</span>: <span class="m">715</span>
+<span class="m">2015</span>: <span class="m">669</span>
+<span class="m">2016</span>: <span class="m">649</span>
+<span class="m">2017</span>: <span class="m">850</span>
+<span class="m">2018</span>: <span class="m">830</span>
+<span class="m">2019</span>: <span class="m">1025</span>
+<span class="m">2020</span>: <span class="m">356</span>
+</code></pre></div>
+
+
+<p>Here, we have just depicted the first bias in our analysis: a vast majority (79%)
+of the articles stored in our database have been written since 2010. This is
+consistent, as HAL was launched back in 2005 by the <em>Centre pour la Communication
+Scientifique Directe</em> (<a href="https://www.ccsd.cnrs.fr/">CCSD</a>).</p>
+<h2>Building the graph of co-authors</h2>
+<hr>
+<p>It remains now to build the graph of co-authors. To do so, we scan
+the co-authors in each article, and add to the graph the new corresponding edges.</p>
+<h3>Parsing the authors in each article</h3>
+<p>For each article in the database, the authors are specified inside
+a string, with the authors' names separated by a <code>and</code> substring:</p>
+<div class="codehilite"><pre><span></span><code><span class="o">&gt;&gt;&gt;</span> <span class="n">authors</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">entries</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s2">&quot;author&quot;</span><span class="p">]</span>
+<span class="s1">&#39;Bonnans, J. Frederic and Zidani, Hasnaa&#39;</span>
+</code></pre></div>
+
+
+<p>To get each name individually, we
+define a separator <code>AUTHOR_SEPARATOR=and</code> and we split the string
+in as many substrings as authors. That gives the two expected names
+for our first entry:</p>
+<div class="codehilite"><pre><span></span><code><span class="o">&gt;&gt;&gt;</span> <span class="kn">import</span> <span class="nn">re</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="n">list_authors</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">AUTHOR_SEPARATOR</span><span class="p">,</span> <span class="n">authors</span><span class="p">)</span>
+<span class="p">[</span><span class="s1">&#39;Bonnans, J. Frederic&#39;</span><span class="p">,</span> <span class="s1">&#39;Zidani, Hasnaa&#39;</span><span class="p">]</span>
+</code></pre></div>
+
+
+<p>By iterating over the database, we could load all names individually and
+start building the nodes of our network. But to avoid duplicate in names,
+we should take into account one last detail.</p>
+<h3>Affecting a key to each author</h3>
+<p>Indeed, bibtex' conventions lack consistency to specify the authors of a paper.
+Imagine your co-author is named <code>Jean-Pierre Dupont</code>. You could enter
+it in bibtex as <code>Dupont, Jean-Pierre</code>, but <code>Dupont, JP</code> or <code>Dupont, J.P.</code>
+are also perfectly valid entries. To avoid duplicate in our dataset, we choose
+to affect a unique key to each author. We will use a dedicated library
+to parse the names, named <code>nameparser</code>. Then, we could parse each name
+individually with the commands:</p>
+<div class="codehilite"><pre><span></span><code><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span> <span class="nn">nameparser</span> <span class="kn">import</span> <span class="n">HumanName</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="n">name</span> <span class="o">=</span> <span class="n">HumanName</span><span class="p">(</span><span class="s2">&quot;Dupont, Jean-Pierre&quot;</span><span class="p">)</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="nb">print</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+<span class="n">Jean</span><span class="o">-</span><span class="n">Pierre</span> <span class="n">Dupont</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="n">name</span><span class="o">.</span><span class="n">first</span>
+<span class="s1">&#39;Jean-Pierre&#39;</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="n">name</span><span class="o">.</span><span class="n">last</span>
+<span class="s1">&#39;Dupont&#39;</span>
+</code></pre></div>
+
+
+<p>or equivalently</p>
+<div class="codehilite"><pre><span></span><code><span class="o">&gt;&gt;&gt;</span> <span class="n">name</span> <span class="o">=</span> <span class="n">HumanName</span><span class="p">(</span><span class="s2">&quot;Dupont, J.P.&quot;</span><span class="p">)</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="nb">print</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+<span class="n">J</span><span class="o">.</span><span class="n">P</span><span class="o">.</span> <span class="n">Dupont</span>
+</code></pre></div>
+
+
+<p>Parsing a name is almost straightforward with <code>nameparser</code>. Hence, we
+could affect a single key to each author, following the procedure:</p>
+<ul>
+<li>We parse a name (e.g. "Dupont, J.P.") with "nameparser"</li>
+<li>We convert the name to lowercase, to avoid issue with capitalization</li>
+<li>We return as key the last name concatenated with the first letter of the
+  first name (so "J.P. Dupont", "J Dupont" and "Jean-Pierre Dupont" would return
+  the same key "dupont j")</li>
+</ul>
+<p>This procedure has a single default: two authors with the same last name but
+with two first names sharing the same first letter would share the same key
+(e.g. <code>Jeanne Dupont</code> and <code>Jean-Pierre Dupont</code>).
+That was a choice we made: parse correctly composed names (as
+<code>Jean-Pierre Dupont</code>) or parse effectively homonyms. Fortunately, we
+have only a few cases of people sharing the same last name in our dataset.</p>
+<p>The implementation is given via the function <code>key_name</code>:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">def</span> <span class="nf">key_name</span><span class="p">(</span><span class="n">name</span><span class="p">):</span>
+    <span class="c1"># parse name</span>
+    <span class="n">parsed</span> <span class="o">=</span> <span class="n">HumanName</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">parsed</span><span class="o">.</span><span class="n">first</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">first_name</span> <span class="o">=</span> <span class="n">parsed</span><span class="o">.</span><span class="n">first</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="c1"># Key is lowercased</span>
+        <span class="n">key</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">parsed</span><span class="o">.</span><span class="n">last</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">first_name</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="k">return</span> <span class="n">key</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">name</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+</code></pre></div>
+
+
+<p>We add a <code>if</code> statement to handle the special case occurring when
+authors do not have any first name.</p>
+<p>That eventually leads to the new function <code>load_authors</code>, scanning
+the database to look for unique authors.</p>
+<div class="codehilite"><pre><span></span><code><span class="k">def</span> <span class="nf">load_authors</span><span class="p">(</span><span class="n">db</span><span class="p">):</span>
+    <span class="n">authors</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">entrie</span> <span class="ow">in</span> <span class="n">db</span><span class="o">.</span><span class="n">entries</span><span class="p">:</span>
+        <span class="n">names</span> <span class="o">=</span> <span class="n">entrie</span><span class="p">[</span><span class="s2">&quot;author&quot;</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">author</span> <span class="ow">in</span> <span class="n">parse_authors</span><span class="p">(</span><span class="n">names</span><span class="p">):</span>
+            <span class="n">name</span> <span class="o">=</span> <span class="n">parse_name</span><span class="p">(</span><span class="n">author</span><span class="p">)</span>
+            <span class="n">key</span> <span class="o">=</span> <span class="n">key_name</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+            <span class="n">val</span> <span class="o">=</span> <span class="n">authors</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="nb">list</span><span class="p">)</span> <span class="ow">and</span> <span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">val</span><span class="p">:</span>
+                <span class="n">val</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">authors</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">name</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">authors</span>
+</code></pre></div>
+
+
+<p>With this function <code>load_authors</code>, we finally have all the ingredients
+we need to build the coauthorship network with <code>networkx</code>.</p>
+<h3>Building the graph with networkx</h3>
+<p>It remains now to build the graph with <a href="https://networkx.github.io">networkx</a>, a graph library written
+in pure Python. We start by importing the library:</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">import</span> <span class="nn">networkx</span> <span class="k">as</span> <span class="nn">nx</span>
+</code></pre></div>
+
+
+<p>By using the function <code>load_authors</code>, we could build a new function
+adding for each author a new node in the graph <code>gx</code>:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">def</span> <span class="nf">_add_nodes</span><span class="p">(</span><span class="n">gx</span><span class="p">,</span> <span class="n">database</span><span class="p">):</span>
+    <span class="n">id_node</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">authors</span> <span class="o">=</span> <span class="n">load_authors</span><span class="p">(</span><span class="n">database</span><span class="p">)</span>
+    <span class="n">correspondance</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">auth</span> <span class="ow">in</span> <span class="n">authors</span><span class="p">:</span>
+        <span class="n">id_node</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="n">gx</span><span class="o">.</span><span class="n">add_node</span><span class="p">(</span><span class="n">id_node</span><span class="p">)</span>
+        <span class="n">correspondance</span><span class="p">[</span><span class="n">auth</span><span class="p">]</span> <span class="o">=</span> <span class="n">id_node</span>
+    <span class="k">return</span> <span class="n">correspondance</span>
+</code></pre></div>
+
+
+<p>The dictionary <code>correspondance</code> stores the correspondence between
+each author's key and its <code>id</code> in the graph. That would be necessary to
+build a metadata file associated to the graph.</p>
+<p>We could now process all articles in the database, and load a new edge
+each time a new co-authorship is detected:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">def</span> <span class="nf">_add_edges</span><span class="p">(</span><span class="n">gx</span><span class="p">,</span> <span class="n">database</span><span class="p">,</span> <span class="n">correspondance</span><span class="p">):</span>
+    <span class="k">for</span> <span class="n">entrie</span> <span class="ow">in</span> <span class="n">database</span><span class="o">.</span><span class="n">entries</span><span class="p">:</span>
+        <span class="n">names</span> <span class="o">=</span> <span class="n">entrie</span><span class="p">[</span><span class="s2">&quot;author&quot;</span><span class="p">]</span>
+        <span class="n">authors</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="c1"># Parse names</span>
+        <span class="k">for</span> <span class="n">author</span> <span class="ow">in</span> <span class="n">parse_authors</span><span class="p">(</span><span class="n">names</span><span class="p">):</span>
+            <span class="n">name</span> <span class="o">=</span> <span class="n">parse_name</span><span class="p">(</span><span class="n">author</span><span class="p">)</span>
+            <span class="n">authors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+        <span class="c1"># Add all corresponding edges</span>
+        <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">authors</span><span class="p">:</span>
+            <span class="n">k1</span> <span class="o">=</span> <span class="n">key_name</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">coname</span> <span class="ow">in</span> <span class="n">authors</span><span class="p">:</span>
+                <span class="n">k2</span> <span class="o">=</span> <span class="n">key_name</span><span class="p">(</span><span class="n">coname</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">k1</span> <span class="o">!=</span> <span class="n">k2</span><span class="p">:</span>
+                    <span class="n">o</span> <span class="o">=</span> <span class="n">correspondance</span><span class="p">[</span><span class="n">k1</span><span class="p">]</span>
+                    <span class="n">d</span> <span class="o">=</span> <span class="n">correspondance</span><span class="p">[</span><span class="n">k2</span><span class="p">]</span>
+                    <span class="n">gx</span><span class="o">.</span><span class="n">add_edge</span><span class="p">(</span><span class="n">o</span><span class="p">,</span> <span class="n">d</span><span class="p">)</span>
+</code></pre></div>
+
+
+<p>It remains to combine the two functions
+<code>_add_nodes</code> and <code>_add_edges</code> to build a new graph from scratch. That writes out:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">def</span> <span class="nf">build_graph</span><span class="p">(</span><span class="n">database</span><span class="p">):</span>
+    <span class="n">gx</span> <span class="o">=</span> <span class="n">nx</span><span class="o">.</span><span class="n">Graph</span><span class="p">()</span>
+    <span class="n">correspondance</span> <span class="o">=</span> <span class="n">_add_nodes</span><span class="p">(</span><span class="n">gx</span><span class="p">,</span> <span class="n">database</span><span class="p">)</span>
+    <span class="n">_add_edges</span><span class="p">(</span><span class="n">gx</span><span class="p">,</span> <span class="n">database</span><span class="p">,</span> <span class="n">correspondance</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">gx</span><span class="p">,</span> <span class="n">correspondance</span>
+</code></pre></div>
+
+
+<p>We build a new graph with</p>
+<div class="codehilite"><pre><span></span><code><span class="o">&gt;&gt;&gt;</span> <span class="n">g</span> <span class="o">=</span> <span class="n">build_graph</span><span class="p">(</span><span class="n">bib_database</span><span class="p">)</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="n">g</span><span class="o">.</span><span class="n">number_of_nodes</span><span class="p">()</span>
+<span class="mi">7487</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="n">g</span><span class="o">.</span><span class="n">number_of_edges</span><span class="p">()</span>
+<span class="mi">19046</span>
+</code></pre></div>
+
+
+<p>So, at the end we get a graph with as many nodes as existing keys, and
+19046 co-authorship relations :)</p>
+<p>It remains to dump the graph in <code>graphml</code> format for future uses:</p>
+<div class="codehilite"><pre><span></span><code>&gt;&gt;&gt; nx.write_graphml<span class="o">(</span>g, <span class="s2">&quot;coauthors.graphml&quot;</span><span class="o">)</span>
+</code></pre></div>
+
+
+<p>That would allow to load the graph in any graph library we want, as <code>graphml</code>
+is a standard format for graph.</p>
+<h2>Recap</h2>
+<hr>
+<p>So, we finally manage to build a coauthorship network from a bibtex file.
+The network
+we output correspond to the coauthorship network of the optimization community
+in France. Let's emphasize the biases our process introduces:</p>
+<ul>
+<li>Almost 80% of the articles we processed were written after 2010. So
+  we are missing the ancient history of the community and focus mostly on the
+  most recent activity. Most of the seminal papers in optimization
+  are not taken into account (think about the works of <a href="https://en.wikipedia.org/wiki/Jean-Jacques_Moreau">Jean-Jacques Moreau</a>
+  or <a href="https://en.wikipedia.org/wiki/Claude_Lemar%C3%A9chal">Claude Lemaréchal</a>).</li>
+<li>No matter how frequent two authors write together, we affect a unit weight
+  to each connection. Indeed, each time we add a coauthorship relation
+  associated to an already existing edge, the function <code>add_edge</code> overwrites
+  the previous edge.</li>
+<li>We rely blindly on HAL's API, notably on its classification in subfields.
+  However, whereas some authors write exclusively their articles in the <code>math-oc</code>
+  subfields, some others disseminate their articles in different subfields
+  (operation research, automatics, signal processing). We miss authors who
+  write their articles in different communities, who are more and more common these days.</li>
+</ul>
+<p>Note also that despite all my care, there might remain some mistakes
+when extracting metadata from the bibtex file. Notably, if you have a better
+idea to improve the key we affect to each name, feel free to update <a href="https://github.com/frapac/carnets/blob/master/blog/coauthors/bibgraph.py">the
+code on Github</a>.</p>
+<p>In a next blog post, we will analyze more closely
+the structure of the graph of co-authors by using <a href="https://juliagraphs.org/LightGraphs.jl/stable/">LightGraphs</a>, a Julia
+library dedicated for network analysis.</p>
+	</div>
+
+
+			<hr>
+		</article>
+
+		<footer>
+			<p>Powered by <a href="http://getpelican.com">Pelican</a> and <a href="http://pages.github.com">GitHub&nbsp;Pages</a>.</p>
+		</footer>
+	</div>
+
+
+</body>
+</html>
