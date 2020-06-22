@@ -60,7 +60,7 @@ alternatives, but come with a few caveats:&lt;/p&gt;
   and more than 1h to be compiled (I guess that's the price to depend on &lt;code&gt;boost::graph&lt;/code&gt;).&lt;/li&gt;
 &lt;/ul&gt;
 &lt;p&gt;On the contrary, &lt;a href="https://github.com/JuliaGraphs/LightGraphs.jl"&gt;LightGraphs&lt;/a&gt; achieves pretty good performance (as stated
-in this [benchmark]) and is a lightweight library.
+in this &lt;a href="https://www.timlrx.com/2020/05/10/benchmark-of-popular-graph-network-packages-v2/"&gt;benchmark&lt;/a&gt;) and is a lightweight library.
 It is written entirely in Julia, and relying on
 a language with built-in linear algebra will prove useful for the next post,
 where we will focus on the detection of communities in our graph.&lt;/p&gt;
