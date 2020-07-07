@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<!-- Basic Metas -->
+	<meta charset="utf-8">
+	<title>Decomposing problems in MOI | François Pacaud</title>
+	<meta name="description" content="In optimization, large-scale problems often own an inherent block structure that could be use to decompose the problem in smaller subproblems, easier to solve. With the democratization of parallel architectures in computing, more and more optimization solvers are able to leverage the structure of optimization problems in the resolution procedure …">
+	<meta name="author" content="">
+	<link rel="author" href=""/>
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+	<!-- Twitter Cards and Open Graph -->
+	<meta name="twitter:card" content="summary">
+	<meta name="twitter:creator" content="">
+	<meta name="twitter:domain" content="">
+	<meta name="twitter:site" content="">
+	<meta property="og:title" content="Decomposing problems in MOI">
+	<meta property="og:description" content="In optimization, large-scale problems often own an inherent block structure that could be use to decompose the problem in smaller subproblems, easier to solve. With the democratization of parallel architectures in computing, more and more optimization solvers are able to leverage the structure of optimization problems in the resolution procedure …">
+	<meta property="og:image" content="frapac.github.io/images/icons/avatar.png">
+	<meta property="og:type" content="website">
+	<meta property="og:url" content="frapac.github.io/pages/">
+
+	<!-- Stylesheets and Web Fonts -->
+	<link href="/theme/style.min.css?baf22033" rel="stylesheet">
+	<link href="https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet">
+
+	<!-- Favicons -->
+	<link rel="apple-touch-icon" sizes="180x180" href="/images/icons/apple-touch-icon.png">
+	<link rel="icon" type="image/png" href="/images/icons/favicon-16x16.png" sizes="16x16">
+	<link rel="icon" type="image/png" href="/images/icons/favicon-32x32.png" sizes="32x32">
+	<meta name="theme-color" content="">
+
+	<meta name="msapplication-TileColor" content="">
+	<meta name="msapplication-TileImage" content="/images/icons/mstile-144x144.png">
+	<meta name="msapplication-square70x70logo" content="/images/icons/mstile-small.png">
+	<meta name="msapplication-square150x150logo" content="/images/icons/mstile-medium.png">
+	<meta name="msapplication-wide310x150logo" content="/images/icons/mstile-wide.png">
+	<meta name="msapplication-square310x310logo" content="/images/icons/mstile-large.png">
+
+	<!--[if lt IE 9]>
+	<script src="/theme/js/html5shiv.min.js"></script>
+	<script src="/theme/js/respond.min.js"></script>
+	<![endif]-->
+</head>
+
+<body>
+	<div class="container">
+		<aside>
+			<a href="/"><img id="avatar" alt="Site Avatar" src="/images/icons/avatar.png"></a>
+			<div id="name"><a href="/">François Pacaud</a></div>
+			<div id="bio">Minimalism by design</div>
+
+			<div id="sidebar-links">
+				<a href="/pages/about/">About</a>&nbsp;|&nbsp;<a href="/archive/">Archive</a>
+			</div>
+
+			<div id="social">
+				<a href="mailto:francoispacaud8+blog@gmail.com" title="Email (francoispacaud8+blog@gmail.com)" class="icon fa fa-envelope"></a>
+				<a href="http://github.com/frapac" title="GitHub" class="icon fa fa-github"></a>
+				<a href="https://scholar.google.fr/citations?user=W_KQN_sAAAAJ&hl=fr&oi=ao" title="Scholar" class="icon fa fa-flask"></a>
+				<a href="/atom.xml" title="Atom Feed" class="icon fa fa-rss"></a>
+			</div>
+            <hr>
+			<div id="sidebar-links">
+                <a href="/pages/articles/">Articles</a></br><a href="/pages/talks/">Talks</a></br><a href="/pages/teaching/">Teaching</a>
+			</div>
+            <hr>
+
+			<hr id="sidebar-divider">
+		</aside>
+
+		<article>
+	<h1 class="title"><a href="/pages/" title="Decomposing problems in MOI">Decomposing problems in MOI</a></h1>
+	<div class="content">
+		<p>In optimization, large-scale problems often own an inherent block structure
+that could be use to decompose the problem in smaller subproblems,
+easier to solve.
+With the democratization of parallel architectures in computing,
+more and more optimization solvers are able to leverage the
+structure of optimization problems in the resolution procedure.
+However, these solvers need the users to provide the so called <em>block-structure</em>
+to decompose the global problem.
+The goal of this short note is to sum up a few initiatives aiming at
+specifying such block structure directly in the Algebreaic Modelling
+Language layer (AML), allowing a direct decomposition in the solver afterwise.
+We will also present a plan to extend MathOptInterface (MOI) to support
+such block structured problems.</p>
+<p>Note that in this note we use the term <em>structure</em> for inherent structures
+arising in the Jacobian's sparsity pattern. We do not treat the case
+of <em>conic structured</em> problems (à la Nemirovsky)</p>
+<p>Note also that this note is not comprehensive. We welcome any feedback
+to make this review as exhaustive as possible.</p>
+<h1>Block-structured Decomposition solvers</h1>
+<p>We first start by reviewing block-structured decomposition solvers.
+The classical algorithms for block-structure optimization are
+Benders and the Dantzig-Wolfe decompositions, widely
+used in the field of integer programming or to solve large-scale
+LP problems. A modern solver implementing these
+decomposition schemes is <a href="https://github.com/Argonne-National-Laboratory/DSP">DSP</a>. SCIP and CPLEX also implement
+native Benders decomposition to decompose large mixed-integer problems.</p>
+<p>Recent trend has seen the emergence of solvers based on interior-point
+methods (IPM) for large-scale LP and QP optimization. To name a few:</p>
+<ul>
+<li><a href="https://www.maths.ed.ac.uk/~gondzio/parallel/solver.html">OOPS</a>, released in 1999, developed at University of Edinburgh</li>
+<li><a href="https://github.com/Argonne-National-Laboratory/PIPS/">PIPS</a>, whose development started in 2012, developed at ANL.</li>
+</ul>
+<p>Lagrangian decomposition is also a popular method. We will add a few
+references to Lagrangian and Augmented-Lagrangian based methods in the future.</p>
+<h1>Passing the structure in the modeler</h1>
+<p>We review in this section how we could extend algebraic languages
+to specify the block structure of the problem. We present different
+initiatives, based on differement modelers (AMPL, GAMS, Pyomo, JuMP).</p>
+<h2>AMPL</h2>
+<p>With the development of OOPS (see section below), the authors noticed the
+need of extending modelers to pass the block-structure directly in the
+specification of the problem. They overloaded the AMPL modeler to achieve
+their goal, and developed the package <a href="https://www.maths.ed.ac.uk/ERGO/sml/">SML</a>
+(Structured Modeling Language).
+We refer to <a href="https://www.maths.ed.ac.uk/~gondzio/reports/cghwgSML.pdf">this report</a> for an exhaustive overview.</p>
+<p>SML relies deeply on the concept of blocks to define the block structure
+of the problem (this comes at no surprise).</p>
+<p>SML's syntax sticks to AMPL's one:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">param</span> <span class="n">Budget</span><span class="p">,</span> <span class="n">Ct</span><span class="p">,</span> <span class="n">Rho</span><span class="p">,</span> <span class="n">Liability1</span><span class="p">,</span> <span class="n">Liability2</span><span class="p">;</span>
+<span class="n">setASSETS</span><span class="p">,</span> <span class="n">NODES</span><span class="p">;</span>
+<span class="n">paramParent</span><span class="p">{</span><span class="n">NODES</span><span class="p">}</span><span class="n">paramValue</span><span class="p">{</span><span class="n">ASSETS</span><span class="p">};</span>
+<span class="n">paramRet</span><span class="p">{</span><span class="n">NODES</span><span class="p">,</span> <span class="n">ASSETS</span><span class="p">};</span>
+<span class="n">paramProbs</span><span class="p">{</span><span class="n">NODES</span><span class="p">};</span>
+<span class="n">varmu</span><span class="p">;</span>
+
+<span class="cp"># Stage 0:</span>
+<span class="n">varxh0</span><span class="p">{</span><span class="n">ASSETS</span><span class="p">}</span><span class="o">&gt;=</span> <span class="mi">0</span><span class="p">,</span> <span class="n">xb0</span><span class="p">{</span><span class="n">ASSETS</span><span class="p">}</span><span class="o">&gt;=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="n">subject</span> <span class="nl">toStartBudget</span><span class="p">:</span>
+    <span class="p">(</span><span class="mi">1</span><span class="o">+</span><span class="n">Ct</span><span class="p">)</span><span class="o">*</span><span class="n">sum</span><span class="p">{</span><span class="n">j</span> <span class="n">in</span> <span class="n">ASSETS</span><span class="p">}</span><span class="n">xb0</span><span class="p">[</span><span class="n">j</span><span class="p">]</span><span class="o">*</span><span class="n">Value</span><span class="p">[</span><span class="n">j</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">Budget</span><span class="p">;</span>
+
+<span class="cp"># Stage 1:</span>
+<span class="n">block</span> <span class="n">Stage1</span><span class="p">{</span><span class="n">n1</span> <span class="n">in</span> <span class="nl">NODES</span><span class="p">:</span><span class="n">Parent</span><span class="p">[</span><span class="n">k</span><span class="p">]</span><span class="o">==</span><span class="mi">0</span><span class="p">}</span><span class="o">:</span> <span class="p">{</span>
+    <span class="n">varxh1</span><span class="p">{</span><span class="n">ASSETS</span><span class="p">}</span><span class="o">&gt;=</span> <span class="mi">0</span><span class="p">,</span> <span class="n">xb1</span><span class="p">{</span><span class="n">ASSETS</span><span class="p">}</span><span class="o">&gt;=</span> <span class="mi">0</span><span class="p">,</span> <span class="n">xs1</span><span class="p">{</span><span class="n">ASSETS</span><span class="p">}</span><span class="o">&gt;=</span> <span class="mi">0</span><span class="p">;</span>
+    <span class="n">subject</span> <span class="n">toInventory</span><span class="p">{</span><span class="n">j</span> <span class="n">in</span> <span class="n">ASSETS</span><span class="p">}</span><span class="o">:</span>
+        <span class="n">xh1</span><span class="p">[</span><span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span><span class="o">+</span><span class="n">Ret</span><span class="p">[</span><span class="n">n1</span><span class="p">,</span><span class="n">j</span><span class="p">])</span> <span class="o">*</span> <span class="n">xh0</span><span class="p">(</span><span class="n">j</span><span class="p">)</span> <span class="o">+</span> <span class="n">xb1</span><span class="p">[</span><span class="n">j</span><span class="p">]</span> <span class="o">-</span> <span class="n">xs1</span><span class="p">[</span><span class="n">j</span><span class="p">];</span>
+    <span class="n">subject</span> <span class="nl">toCashBalance</span><span class="p">:</span>
+        <span class="p">(</span><span class="mi">1</span><span class="o">-</span><span class="n">Ct</span><span class="p">)</span> <span class="o">*</span> <span class="n">sum</span><span class="p">{</span><span class="n">j</span> <span class="n">in</span> <span class="n">ASSETS</span><span class="p">}</span><span class="n">Value</span><span class="p">[</span><span class="n">j</span><span class="p">]</span><span class="o">*</span><span class="n">xs1</span><span class="p">[</span><span class="n">j</span><span class="p">]</span> <span class="o">=</span><span class="n">Liability1</span> <span class="o">+</span> <span class="p">(</span><span class="mi">1</span><span class="o">+</span><span class="n">Ct</span><span class="p">)</span> <span class="o">*</span> <span class="n">sum</span><span class="p">{</span><span class="n">j</span> <span class="n">in</span> <span class="n">ASSETS</span><span class="p">}</span><span class="n">Value</span><span class="p">[</span><span class="n">j</span><span class="p">]</span><span class="o">*</span><span class="n">xb1</span><span class="p">[</span><span class="n">j</span><span class="p">];</span>
+
+    <span class="cp"># Stage 2:</span>
+    <span class="n">block</span> <span class="n">Stage2</span><span class="p">{</span><span class="n">n2</span> <span class="n">in</span> <span class="nl">NODES</span><span class="p">:</span><span class="n">Parent</span><span class="p">[</span><span class="n">n2</span><span class="p">]</span><span class="o">==</span><span class="n">n1</span><span class="p">}</span><span class="o">:</span><span class="p">{</span>
+        <span class="n">varxh2</span><span class="p">{</span><span class="n">ASSETS</span><span class="p">}</span><span class="o">&gt;=</span> <span class="mi">0</span><span class="p">,</span> <span class="n">xb2</span><span class="p">{</span><span class="n">ASSETS</span><span class="p">}</span><span class="o">&gt;=</span> <span class="mi">0</span><span class="p">,</span> <span class="n">xs2</span><span class="p">{</span><span class="n">ASSETS</span><span class="p">}</span><span class="o">&gt;=</span> <span class="mi">0</span><span class="p">;</span>
+        <span class="n">subject</span> <span class="n">toInventory</span><span class="p">{</span><span class="n">j</span> <span class="n">in</span> <span class="n">ASSETS</span><span class="p">}</span><span class="o">:</span>
+            <span class="n">xh2</span><span class="p">[</span><span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span><span class="o">+</span><span class="n">Ret2</span><span class="p">[</span><span class="n">n2</span><span class="p">,</span><span class="n">j</span><span class="p">])</span> <span class="o">*</span> <span class="n">xh1</span><span class="p">(</span><span class="n">j</span><span class="p">)</span> <span class="o">+</span> <span class="n">xb2</span><span class="p">[</span><span class="n">j</span><span class="p">]</span> <span class="o">-</span> <span class="n">xs2</span><span class="p">[</span><span class="n">j</span><span class="p">];</span>
+        <span class="n">subject</span> <span class="nl">toCashBalance</span><span class="p">:</span>
+            <span class="p">(</span><span class="mi">1</span><span class="o">-</span><span class="n">Ct</span><span class="p">)</span> <span class="o">*</span> <span class="n">sum</span><span class="p">{</span><span class="n">j</span> <span class="n">in</span> <span class="n">ASSETS</span><span class="p">}</span> <span class="n">value</span><span class="p">[</span><span class="n">j</span><span class="p">]</span><span class="o">*</span><span class="n">xs2</span><span class="p">[</span><span class="n">j</span><span class="p">]</span> <span class="o">=</span>
+                <span class="n">Liability2</span> <span class="o">+</span> <span class="p">(</span><span class="mi">1</span><span class="o">+</span><span class="n">Ct</span><span class="p">)</span> <span class="o">*</span> <span class="n">sum</span><span class="p">{</span><span class="n">j</span> <span class="n">in</span> <span class="n">ASSETS</span><span class="p">}</span><span class="n">Value</span><span class="p">[</span><span class="n">j</span><span class="p">]</span><span class="o">*</span><span class="n">xb2</span><span class="p">[</span><span class="n">j</span><span class="p">];</span>
+        <span class="nl">varwealth</span> <span class="p">:</span><span class="o">=</span> <span class="n">Prob</span><span class="p">[</span><span class="n">n1</span><span class="p">]</span> <span class="o">*</span> <span class="n">Prob</span><span class="p">[</span><span class="n">n2</span><span class="p">]</span> <span class="o">*</span> <span class="n">sum</span><span class="p">{</span><span class="n">j</span> <span class="n">in</span> <span class="n">ASSETS</span><span class="p">}</span><span class="n">Value</span><span class="p">[</span><span class="n">j</span><span class="p">]</span><span class="o">*</span><span class="n">xh2</span><span class="p">[</span><span class="n">j</span><span class="p">];</span>
+
+    <span class="nl">maximizeobjFunc</span><span class="p">:</span>
+        <span class="p">(</span> <span class="n">mu</span> <span class="o">-</span> <span class="n">Rho</span> <span class="o">*</span> <span class="p">((</span><span class="n">wealth</span><span class="o">*</span><span class="n">wealth</span><span class="p">)</span> <span class="o">-</span> <span class="n">mu</span><span class="o">*</span><span class="n">mu</span><span class="p">)</span> <span class="p">)</span> <span class="o">*</span> <span class="n">Prob</span><span class="p">[</span><span class="n">n1</span><span class="p">]</span> <span class="o">*</span> <span class="n">Prob2</span><span class="p">[</span><span class="n">n2</span><span class="p">]</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="n">subject</span> <span class="nl">toExpPortfolioValue</span><span class="p">:</span>
+    <span class="n">mu</span> <span class="o">=</span> <span class="n">sum</span><span class="p">{</span><span class="n">n1</span> <span class="n">in</span> <span class="nl">NODES</span><span class="p">:</span><span class="n">Parent</span><span class="p">[</span><span class="n">n1</span><span class="p">]</span><span class="o">==</span><span class="mi">0</span><span class="p">,</span> <span class="n">n2</span> <span class="n">in</span> <span class="nl">NODES</span><span class="p">:</span><span class="n">Parent</span><span class="p">[</span><span class="n">n2</span><span class="p">]</span><span class="o">==</span><span class="n">n1</span><span class="p">}</span>
+        <span class="n">Prob</span><span class="p">[</span><span class="n">n1</span><span class="p">]</span> <span class="o">*</span> <span class="n">Prob</span><span class="p">[</span><span class="n">n2</span><span class="p">]</span> <span class="o">*</span> <span class="n">Stage1</span><span class="p">[</span><span class="n">n1</span><span class="p">].</span><span class="n">Stage2</span><span class="p">[</span><span class="n">n2</span><span class="p">].</span><span class="n">wealth</span><span class="p">;</span>
+</code></pre></div>
+
+
+<p>SML has also a function <code>stage</code> allowing to define directly a new
+stage in stochastic optimization problems.</p>
+<h2>GAMS</h2>
+<p>When developing the BEAM-ME project in Germany, the developers targeted the
+resolution of large-scale unit-commitment problems with billions of variables
+and constraints. They forked the solver PIPS-NLP and viewed their unit-commitment
+problems as block-structured ones.
+To our interest, they developed a GAMS extension, called GAMS/PIPS-NLP, to
+annotate the block structure of the unit-commitment problem directly using GAMS
+syntax.
+We refer to <a href="https://ura3.c.ism.ac.jp/opt2019/slides/Bussieck.pdf">these slides</a> for an overview. In short, GAMS/PIPS-NLP syntax
+looks as follow:</p>
+<div class="codehilite"><pre><span></span><code><span class="o">*</span> <span class="n">Master</span> <span class="n">variables</span> <span class="n">and</span> <span class="n">equation</span>
+<span class="n">FLOW</span><span class="p">.</span><span class="n">stage</span><span class="p">(</span><span class="n">t</span><span class="p">,</span><span class="n">net</span><span class="p">(</span><span class="n">rr1</span><span class="p">,</span><span class="n">rr2</span><span class="p">))</span>       <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
+<span class="n">LINK_ADD_CAP</span><span class="p">.</span><span class="n">stage</span><span class="p">(</span><span class="n">net</span><span class="p">(</span><span class="n">rr1</span><span class="p">,</span><span class="n">rr2</span><span class="p">))</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
+<span class="p">[...]</span>
+<span class="o">*</span> <span class="n">Block</span> <span class="n">variables</span> <span class="n">and</span> <span class="n">equations</span>
+<span class="n">POWER</span><span class="p">.</span><span class="n">stage</span><span class="p">(</span><span class="n">t</span><span class="p">,</span><span class="n">rp</span><span class="p">(</span><span class="n">rr</span><span class="p">,</span><span class="n">p</span><span class="p">))</span>    <span class="o">=</span> <span class="n">ord</span><span class="p">(</span><span class="n">rr</span><span class="p">)</span><span class="o">+</span><span class="mi">1</span><span class="p">;</span>
+<span class="n">EMISSION_SPLIT</span><span class="p">.</span><span class="n">stage</span><span class="p">(</span><span class="n">rr</span><span class="p">,</span><span class="n">e</span><span class="p">)</span> <span class="o">=</span> <span class="n">ord</span><span class="p">(</span><span class="n">rr</span><span class="p">)</span><span class="o">+</span><span class="mi">1</span><span class="p">;</span>
+<span class="p">[...]</span>
+<span class="n">eq_power_balance</span><span class="p">.</span><span class="n">stage</span><span class="p">(</span><span class="n">t</span><span class="p">,</span><span class="n">rr</span><span class="p">)</span>   <span class="o">=</span> <span class="n">ord</span><span class="p">(</span><span class="n">rr</span><span class="p">)</span><span class="o">+</span><span class="mi">1</span><span class="p">;</span>
+<span class="n">eq_emission_region</span><span class="p">.</span><span class="n">stage</span><span class="p">(</span><span class="n">rr</span><span class="p">,</span><span class="n">e</span><span class="p">)</span> <span class="o">=</span> <span class="n">ord</span><span class="p">(</span><span class="n">rr</span><span class="p">)</span><span class="o">+</span><span class="mi">1</span><span class="p">;</span>
+<span class="n">eq_emission_cost</span><span class="p">.</span><span class="n">stage</span><span class="p">(</span><span class="n">rr</span><span class="p">,</span><span class="n">e</span><span class="p">)</span>   <span class="o">=</span> <span class="n">ord</span><span class="p">(</span><span class="n">rr</span><span class="p">)</span><span class="o">+</span><span class="mi">1</span><span class="p">;</span>
+<span class="p">[...]</span>
+<span class="o">*</span> <span class="n">Linking</span> <span class="n">Equation</span>
+<span class="n">eq_emission_cap</span><span class="p">.</span><span class="n">stage</span><span class="p">(</span><span class="n">e</span><span class="p">)</span> <span class="o">=</span> <span class="n">card</span><span class="p">(</span><span class="n">rr</span><span class="p">)</span><span class="o">+</span><span class="mi">2</span><span class="p">;</span>
+</code></pre></div>
+
+
+<p>Here, we view that the block-structure is directly specified
+with the <code>.stage</code> annotation.</p>
+<h2>Pyomo ecosystem</h2>
+<p>There exists various initiatives to specify block-structure problems
+in the Pyomo ecosystem. The most advanded is <code>PySP</code>, which targets
+stochastic programming problems. Again, the syntax of <code>PySP</code> relies
+on the concept of <em>stage</em>:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">st_model</span><span class="o">=</span> <span class="n">CreateConcreteTwoStageScenarioTreeModel</span><span class="p">(</span><span class="n">scenarios</span><span class="p">)</span>
+<span class="n">first_stage</span><span class="o">=</span> <span class="n">st_model</span><span class="o">.</span><span class="n">Stages</span><span class="o">.</span><span class="n">first</span><span class="p">()</span>
+<span class="n">second_stage</span><span class="o">=</span> <span class="n">st_model</span><span class="o">.</span><span class="n">Stages</span><span class="o">.</span><span class="n">last</span><span class="p">()</span>
+<span class="c1"># First Stage</span>
+<span class="n">st_model</span><span class="o">.</span><span class="n">StageCost</span><span class="p">[</span><span class="n">first_stage</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;FirstStageCost&#39;</span>
+<span class="n">st_model</span><span class="o">.</span><span class="n">StageVariables</span><span class="p">[</span><span class="n">first_stage</span><span class="p">]</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="err">‘</span><span class="n">cr</span><span class="s1">&#39;)</span>
+<span class="n">st_model</span><span class="o">.</span><span class="n">StageVariables</span><span class="p">[</span><span class="n">first_stage</span><span class="p">]</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="err">‘</span><span class="n">ah</span><span class="err">’</span><span class="p">)</span>
+<span class="n">st_model</span><span class="o">.</span><span class="n">StageVariables</span><span class="p">[</span><span class="n">first_stage</span><span class="p">]</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="err">‘</span><span class="n">hw</span><span class="s1">&#39;)</span>
+<span class="c1"># Second Stage</span>
+<span class="n">st_model</span><span class="o">.</span><span class="n">StageCost</span><span class="p">[</span><span class="n">second_stage</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;SecondStageCost&#39;</span>
+</code></pre></div>
+
+
+<h2>JuMP ecosystem</h2>
+<p>With the emergence of JuMP, different
+initiatives have been initiated to specify the block-structure
+of a problem in JuMP's syntax. Again, note this review is far
+from being exhaustive, as the ecosystem is evolving quickly.</p>
+<h3>StructJuMP.jl</h3>
+<p>A first package for block-structured optimization is <a href="https://github.com/StructJuMP/StructJuMP.jl">StructJuMP.jl</a>,
+whose development was initiated at ANL. The package originally
+supported both linear and non-linear block-structure optimization. However,
+since the release of JuMP 0.19, non-linear problems are not supported
+anymore. Also, the package is currently built on top of JuMP. A port at
+the MOI level would allow a better flexibility when passing the problem
+to the solver.</p>
+<p>The syntax of StructJuMP.jl looks like as follow:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">using</span> <span class="n">StructJuMP</span>
+
+<span class="n">numScen</span> <span class="o">=</span> <span class="mi">2</span>
+<span class="n">m</span> <span class="o">=</span> <span class="n">StructuredModel</span><span class="p">(</span><span class="n">num_scenarios</span><span class="o">=</span><span class="n">numScen</span><span class="p">)</span>
+<span class="nd">@variable</span><span class="p">(</span><span class="n">m</span><span class="p">,</span> <span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="o">:</span><span class="mi">2</span><span class="p">])</span>
+<span class="nd">@NLconstraint</span><span class="p">(</span><span class="n">m</span><span class="p">,</span> <span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">x</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">==</span> <span class="mi">100</span><span class="p">)</span>
+<span class="nd">@NLobjective</span><span class="p">(</span><span class="n">m</span><span class="p">,</span> <span class="n">Min</span><span class="p">,</span> <span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">^</span><span class="mi">2</span> <span class="o">+</span> <span class="n">x</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">^</span><span class="mi">2</span> <span class="o">+</span> <span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">*</span><span class="n">x</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+
+<span class="k">for</span> <span class="n">i</span> <span class="kp">in</span> <span class="mi">1</span><span class="o">:</span><span class="n">numScen</span>
+    <span class="n">bl</span> <span class="o">=</span> <span class="n">StructuredModel</span><span class="p">(</span><span class="n">parent</span><span class="o">=</span><span class="n">m</span><span class="p">,</span> <span class="n">id</span><span class="o">=</span><span class="n">i</span><span class="p">)</span>
+    <span class="nd">@variable</span><span class="p">(</span><span class="n">bl</span><span class="p">,</span> <span class="n">y</span><span class="p">[</span><span class="mi">1</span><span class="o">:</span><span class="mi">2</span><span class="p">])</span>
+    <span class="nd">@NLconstraint</span><span class="p">(</span><span class="n">bl</span><span class="p">,</span> <span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">y</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">y</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">≥</span>  <span class="mi">0</span><span class="p">)</span>
+    <span class="nd">@NLconstraint</span><span class="p">(</span><span class="n">bl</span><span class="p">,</span> <span class="n">x</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">+</span> <span class="n">y</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">y</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">≤</span> <span class="mi">50</span><span class="p">)</span>
+    <span class="nd">@NLobjective</span><span class="p">(</span><span class="n">bl</span><span class="p">,</span> <span class="n">Min</span><span class="p">,</span> <span class="n">y</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">^</span><span class="mi">2</span> <span class="o">+</span> <span class="n">y</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">^</span><span class="mi">2</span> <span class="o">+</span> <span class="n">y</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">*</span><span class="n">y</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+<span class="k">end</span>
+</code></pre></div>
+
+
+<p>Again, we view that we rely on a "block-like" syntax, with different
+subproblems interconnected with a master problem.</p>
+<h3>Plasmo.jl</h3>
+<p><a href="https://github.com/zavalab/Plasmo.jl">Plasmo.jl</a> is a great package that allows to specify the block-structure
+directly using a graph syntax. It supports both linear and non-linear
+problems. The syntax is:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">graph</span> <span class="o">=</span> <span class="n">OptiGraph</span><span class="p">()</span>
+
+<span class="c">#Add nodes to a ModelGraph</span>
+<span class="nd">@optinode</span><span class="p">(</span><span class="n">graph</span><span class="p">,</span><span class="n">n1</span><span class="p">)</span>
+<span class="nd">@optinode</span><span class="p">(</span><span class="n">graph</span><span class="p">,</span><span class="n">n2</span><span class="p">)</span>
+
+<span class="c">#Add variables, constraints, and objective functions to nodes</span>
+<span class="nd">@variable</span><span class="p">(</span><span class="n">n1</span><span class="p">,</span><span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">x</span> <span class="o">&lt;=</span> <span class="mi">2</span><span class="p">)</span>
+<span class="nd">@variable</span><span class="p">(</span><span class="n">n1</span><span class="p">,</span><span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">y</span> <span class="o">&lt;=</span> <span class="mi">3</span><span class="p">)</span>
+<span class="nd">@constraint</span><span class="p">(</span><span class="n">n1</span><span class="p">,</span><span class="n">x</span><span class="o">+</span><span class="n">y</span> <span class="o">&lt;=</span> <span class="mi">4</span><span class="p">)</span>
+<span class="nd">@objective</span><span class="p">(</span><span class="n">n1</span><span class="p">,</span><span class="n">Min</span><span class="p">,</span><span class="n">x</span><span class="p">)</span>
+
+<span class="nd">@variable</span><span class="p">(</span><span class="n">n2</span><span class="p">,</span><span class="n">x</span><span class="p">)</span>
+<span class="nd">@NLnodeconstraint</span><span class="p">(</span><span class="n">n2</span><span class="p">,</span><span class="n">exp</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="mi">2</span><span class="p">)</span>
+
+<span class="c">#Add a linkconstraint to couple modelnodes</span>
+<span class="nd">@linkconstraint</span><span class="p">(</span><span class="n">graph</span><span class="p">,</span><span class="n">n1</span><span class="p">[</span><span class="o">:</span><span class="n">x</span><span class="p">]</span> <span class="o">==</span> <span class="n">n2</span><span class="p">[</span><span class="o">:</span><span class="n">x</span><span class="p">])</span>
+</code></pre></div>
+
+
+<h3>BlockDecomposition.jl</h3>
+<p><a href="https://github.com/realopt/BlockDecomposition.jl">BlockDecomposition.jl</a> is currently developped at INRIA Bordeaux.
+It implements an extension of JuMP for the decomposition of linear
+problems (using either Benders or Dantzig-Wolfe decompositions).
+Here, the approach adopted differs from the previous ones.
+The decomposition structure is specified with a callback, returning
+for each variable in the <code>JuMP.Model</code> if it belongs to the master problem
+or one of the subproblems. The syntax is:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">fl</span> <span class="o">=</span> <span class="n">BlockModel</span><span class="p">(</span><span class="n">solver</span> <span class="o">=</span> <span class="n">solver</span><span class="p">)</span>
+
+<span class="nd">@variable</span><span class="p">(</span><span class="n">fl</span><span class="p">,</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span> <span class="kp">in</span> <span class="n">data</span><span class="o">.</span><span class="n">customers</span><span class="p">,</span> <span class="n">j</span> <span class="kp">in</span> <span class="n">data</span><span class="o">.</span><span class="n">factories</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="mi">1</span> <span class="p">)</span>
+<span class="nd">@variable</span><span class="p">(</span><span class="n">fl</span><span class="p">,</span> <span class="n">y</span><span class="p">[</span><span class="n">j</span> <span class="kp">in</span> <span class="n">data</span><span class="o">.</span><span class="n">factories</span><span class="p">],</span> <span class="n">Bin</span><span class="p">)</span>
+<span class="nd">@constraint</span><span class="p">(</span><span class="n">fl</span><span class="p">,</span> <span class="n">cov</span><span class="p">[</span><span class="n">i</span> <span class="kp">in</span> <span class="n">data</span><span class="o">.</span><span class="n">customers</span><span class="p">],</span>
+            <span class="n">sum</span><span class="p">(</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="k">for</span> <span class="n">j</span> <span class="kp">in</span> <span class="n">data</span><span class="o">.</span><span class="n">factories</span> <span class="p">)</span> <span class="o">&gt;=</span> <span class="mi">1</span><span class="p">)</span>
+<span class="nd">@constraint</span><span class="p">(</span><span class="n">fl</span><span class="p">,</span> <span class="n">knp</span><span class="p">[</span><span class="n">j</span> <span class="kp">in</span> <span class="n">data</span><span class="o">.</span><span class="n">factories</span><span class="p">],</span>
+            <span class="n">sum</span><span class="p">(</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="kp">in</span> <span class="n">data</span><span class="o">.</span><span class="n">customers</span> <span class="p">)</span> <span class="o">&lt;=</span> <span class="n">y</span><span class="p">[</span><span class="n">j</span><span class="p">]</span> <span class="o">*</span> <span class="n">data</span><span class="o">.</span><span class="n">capacities</span><span class="p">[</span><span class="n">j</span><span class="p">])</span>
+<span class="nd">@objective</span><span class="p">(</span><span class="n">fl</span><span class="p">,</span> <span class="n">Min</span><span class="p">,</span>
+            <span class="n">sum</span><span class="p">(</span> <span class="n">data</span><span class="o">.</span><span class="n">costs</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">]</span> <span class="o">*</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="k">for</span> <span class="n">j</span> <span class="kp">in</span> <span class="n">data</span><span class="o">.</span><span class="n">factories</span><span class="p">,</span> <span class="n">i</span> <span class="kp">in</span> <span class="n">data</span><span class="o">.</span><span class="n">customers</span><span class="p">)</span>
+            <span class="o">+</span> <span class="n">sum</span><span class="p">(</span> <span class="n">data</span><span class="o">.</span><span class="n">fixedcosts</span><span class="p">[</span><span class="n">j</span><span class="p">]</span> <span class="o">*</span> <span class="n">y</span><span class="p">[</span><span class="n">j</span><span class="p">]</span> <span class="k">for</span> <span class="n">j</span> <span class="kp">in</span> <span class="n">data</span><span class="o">.</span><span class="n">factories</span><span class="p">)</span> <span class="p">)</span>
+
+<span class="c"># Benders decomposition</span>
+<span class="k">function</span> <span class="n">benders_fct</span><span class="p">(</span><span class="n">varname</span><span class="o">::</span><span class="kt">Symbol</span><span class="p">,</span> <span class="n">varid</span><span class="o">::</span><span class="kt">Tuple</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">varname</span> <span class="o">==</span> <span class="o">:</span><span class="n">x</span>
+        <span class="k">return</span> <span class="p">(</span><span class="o">:</span><span class="n">B_SP</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="k">else</span>
+        <span class="k">return</span> <span class="p">(</span><span class="o">:</span><span class="n">B_MASTER</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="k">end</span>
+<span class="k">end</span>
+<span class="n">add_Benders_decomposition</span><span class="p">(</span><span class="n">fl</span><span class="p">,</span> <span class="n">benders_fct</span><span class="p">)</span>
+</code></pre></div>
+
+
+<h1>Porting to MathOptInterface</h1>
+<p>We believe that specifying the block structure directly at the MOI
+level could greatly enhance the specification of the problem for
+the solver. We make hereafter a few proposals, to open the discussion
+on this topic. However, we have to remain careful. Indeed, for large-scale
+problems, experience tells us that most of the time is being spent
+in the generation of the model before passing it to the solver. Ideally,
+in a distributed environment, the subproblems should be generated directly
+on the working nodes, rather than building them on the master node then
+dispatching them using MPI.
+Also, we have to take into account that MPI is column structured (in the sense
+that we start by adding new variables, then we affect each variable to
+different constrained sets).</p>
+<p>To specify the block-structure at the algebraic level, we need two
+pieces of information:</p>
+<ul>
+<li>which variables and constraints belong to each block?</li>
+<li>how the different blocks are linked together?</li>
+</ul>
+<p>Looking at StructJuMP syntax, we see no objection in porting the code to MOI.
+We just have to be careful in the design.
+A possible implementation in MOI would be as follows:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">struct</span> <span class="n">VariableRefBlock</span>
+    <span class="n">index</span><span class="o">::</span><span class="n">MOI</span><span class="o">.</span><span class="n">VariableIndex</span>
+    <span class="n">block</span><span class="o">::</span><span class="n">BlockID</span>
+    <span class="n">info</span><span class="o">::</span><span class="n">MOI</span><span class="o">.</span><span class="n">AbstractVariableAttribute</span>
+<span class="k">end</span>
+</code></pre></div>
+
+
+<p>to keep a reference to the variable index and its associated block.
+Then, we could define a <code>DecompositionOptimizer &lt;: MOI.AbstractOptimizer</code>
+to build our decomposed model. An idea would be to follow one of
+the MOI's extensions, for instance <a href="https://github.com/tomasfmg/ParametricOptInterface.jl">ParametricOptInterface.jl</a>,
+currently under development. At the end, the structure of the decomposed
+problem could be passed to a solver by implementing carefully a
+<code>MOI.copy_to</code> function.</p>
+<p>As you could see, this is very premature work. This article aims more
+at triggering a discussion about decomposition methods in MOI, to improve
+the current setting!</p>
+	</div>
+	<div id="back-to-home"><a href="/">&laquo; Back to Home</a></div>
+			<hr>
+		</article>
+
+		<footer>
+			<p>Powered by <a href="http://getpelican.com">Pelican</a> and <a href="http://pages.github.com">GitHub&nbsp;Pages</a>.</p>
+		</footer>
+	</div>
+
+
+</body>
+</html>
