@@ -160,7 +160,6 @@ of the problem (this comes at no surprise).</p>
         <span class="n">Prob</span><span class="p">[</span><span class="n">n1</span><span class="p">]</span> <span class="o">*</span> <span class="n">Prob</span><span class="p">[</span><span class="n">n2</span><span class="p">]</span> <span class="o">*</span> <span class="n">Stage1</span><span class="p">[</span><span class="n">n1</span><span class="p">].</span><span class="n">Stage2</span><span class="p">[</span><span class="n">n2</span><span class="p">].</span><span class="n">wealth</span><span class="p">;</span>
 </code></pre></div>
 
-
 <p>SML has also a function <code>stage</code> allowing to define directly a new
 stage in stochastic optimization problems.</p>
 <h2>GAMS</h2>
@@ -189,7 +188,6 @@ looks as follow:</p>
 <span class="n">eq_emission_cap</span><span class="p">.</span><span class="n">stage</span><span class="p">(</span><span class="n">e</span><span class="p">)</span> <span class="o">=</span> <span class="n">card</span><span class="p">(</span><span class="n">rr</span><span class="p">)</span><span class="o">+</span><span class="mi">2</span><span class="p">;</span>
 </code></pre></div>
 
-
 <p>Here, we view that the block-structure is directly specified
 with the <code>.stage</code> annotation.</p>
 <h2>Pyomo ecosystem</h2>
@@ -208,7 +206,6 @@ on the concept of <em>stage</em>:</p>
 <span class="c1"># Second Stage</span>
 <span class="n">st_model</span><span class="o">.</span><span class="n">StageCost</span><span class="p">[</span><span class="n">second_stage</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;SecondStageCost&#39;</span>
 </code></pre></div>
-
 
 <h2>JuMP ecosystem</h2>
 <p>With the emergence of JuMP, different
@@ -241,7 +238,6 @@ to the solver.</p>
 <span class="k">end</span>
 </code></pre></div>
 
-
 <p>Again, we view that we rely on a "block-like" syntax, with different
 subproblems interconnected with a master problem.</p>
 <h3>Plasmo.jl</h3>
@@ -266,7 +262,6 @@ problems. The syntax is:</p>
 <span class="c">#Add a linkconstraint to couple modelnodes</span>
 <span class="nd">@linkconstraint</span><span class="p">(</span><span class="n">graph</span><span class="p">,</span><span class="n">n1</span><span class="p">[</span><span class="o">:</span><span class="n">x</span><span class="p">]</span> <span class="o">==</span> <span class="n">n2</span><span class="p">[</span><span class="o">:</span><span class="n">x</span><span class="p">])</span>
 </code></pre></div>
-
 
 <h3>BlockDecomposition.jl</h3>
 <p><a href="https://github.com/realopt/BlockDecomposition.jl">BlockDecomposition.jl</a> is currently developped at INRIA Bordeaux.
@@ -299,7 +294,6 @@ or one of the subproblems. The syntax is:</p>
 <span class="n">add_Benders_decomposition</span><span class="p">(</span><span class="n">fl</span><span class="p">,</span> <span class="n">benders_fct</span><span class="p">)</span>
 </code></pre></div>
 
-
 <h1>Porting to MathOptInterface</h1>
 <p>We believe that specifying the block structure directly at the MOI
 level could greatly enhance the specification of the problem for
@@ -328,7 +322,6 @@ A possible implementation in MOI would be as follows:</p>
     <span class="n">info</span><span class="o">::</span><span class="n">MOI</span><span class="o">.</span><span class="n">AbstractVariableAttribute</span>
 <span class="k">end</span>
 </code></pre></div>
-
 
 <p>to keep a reference to the variable index and its associated block.
 Then, we could define a <code>DecompositionOptimizer &lt;: MOI.AbstractOptimizer</code>

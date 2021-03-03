@@ -149,11 +149,9 @@ for plotting our results directly in the terminal.</p>
 <span class="k">using</span> <span class="n">Statistics</span>
 </code></pre></div>
 
-
 <p>and our graph library:</p>
 <div class="codehilite"><pre><span></span><code><span class="k">using</span> <span class="n">LightGraphs</span>
 </code></pre></div>
-
 
 <p>We will need also the following packages to load a network specified
 in <code>graphml</code> format and the metadata from the CSV file.</p>
@@ -169,7 +167,6 @@ in <code>graphml</code> format and the metadata from the CSV file.</p>
 <span class="n">using</span> <span class="n">Printf</span>
 </code></pre></div>
 
-
 <h3>Loading the coauthorship network to LightGraphs</h3>
 <p>We first load the coauthorship network into our graph library.
 We start by setting the path to the input graph, which should be, if
@@ -177,12 +174,10 @@ we follow the naming of the <a href="/2020/06/0_coauthor_processing/">previous p
 <div class="codehilite"><pre><span></span><code><span class="n">GRAPH_SRC</span> <span class="o">=</span> <span class="s">&quot;coauthors.graphml&quot;</span>
 </code></pre></div>
 
-
 <p>We use <code>GraphIO</code> to load the graph into <code>LightGraphs</code>:</p>
 <div class="codehilite"><pre><span></span><code><span class="n">reader</span> <span class="o">=</span> <span class="n">GraphIO</span><span class="o">.</span><span class="n">GraphML</span><span class="o">.</span><span class="n">GraphMLFormat</span><span class="p">()</span>
 <span class="n">g</span> <span class="o">=</span> <span class="n">loadgraph</span><span class="p">(</span><span class="n">GRAPH_SRC</span><span class="p">,</span> <span class="n">reader</span><span class="p">)</span>
 </code></pre></div>
-
 
 <p>We now get a valid <code>LightGraphs</code> graph.</p>
 <h3>Loading the metadata</h3>
@@ -190,7 +185,6 @@ we follow the naming of the <a href="/2020/06/0_coauthor_processing/">previous p
 of the graph a corresponding author in the community:</p>
 <div class="codehilite"><pre><span></span><code><span class="n">df</span> <span class="o">=</span> <span class="n">DataFrame</span><span class="p">(</span><span class="n">CSV</span><span class="o">.</span><span class="n">File</span><span class="p">(</span><span class="s">&quot;metadata.txt&quot;</span><span class="p">,</span> <span class="n">delim</span><span class="o">=</span><span class="sc">&#39;;&#39;</span><span class="p">,</span> <span class="n">header</span><span class="o">=</span><span class="mi">0</span><span class="p">))</span>
 </code></pre></div>
-
 
 <p>Looking more closely at the first row, we get:</p>
 <div class="codehilite"><pre><span></span><code><span class="n">julia</span><span class="o">&gt;</span> <span class="n">df</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="o">:</span><span class="p">]</span>
@@ -200,7 +194,6 @@ of the graph a corresponding author in the community:</p>
 <span class="n">├─────┼───────────┼─────────┼──────────────────────────┤</span>
 <span class="n">│</span> <span class="mi">1</span>   <span class="n">│</span> <span class="n">bonnans</span> <span class="n">j</span> <span class="n">│</span> <span class="mi">1</span>       <span class="n">│</span> <span class="p">[</span><span class="err">&#39;</span><span class="n">Bonnans</span><span class="p">,</span> <span class="n">J</span><span class="o">.</span> <span class="n">Frederic</span><span class="o">&#39;</span><span class="p">]</span> <span class="n">│</span>
 </code></pre></div>
-
 
 <p>I confess I forgot to specify correctly the names for each column...
 The first column corresponds to the <code>key</code> we designed in the previous article.
@@ -227,12 +220,10 @@ corresponding author in the dataframe <code>df</code>.</p>
 <span class="k">end</span>
 </code></pre></div>
 
-
 <p>and we get:</p>
 <div class="codehilite"><pre><span></span><code><span class="n">julia</span><span class="o">&gt;</span> <span class="n">get_name</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
 <span class="s">&quot;Bonnans, J. Frederic&quot;</span>
 </code></pre></div>
-
 
 <p>which is a lot more better :)</p>
 <p>Now, we have everything set up to begin our analysis.</p>
@@ -248,12 +239,10 @@ it appears that the graph is not connected:</p>
 <span class="kc">false</span>
 </code></pre></div>
 
-
 <p>Let's analyze the different connected components. We first extract
 them from the original graph <code>g</code>:</p>
 <div class="codehilite"><pre><span></span><code><span class="n">connected_graphs</span> <span class="o">=</span> <span class="n">connected_components</span><span class="p">(</span><span class="n">g</span><span class="p">)</span>
 </code></pre></div>
-
 
 <p>and we get 534 subgraphs ... which is large. It appears that the community
 is quite balkanized. Let's analyze the number of nodes in each connected
@@ -262,7 +251,6 @@ components:</p>
 <span class="c"># Sort the results inplace</span>
 <span class="n">sort!</span><span class="p">(</span><span class="n">number_nodes</span><span class="p">,</span> <span class="n">rev</span><span class="o">=</span><span class="kc">true</span><span class="p">)</span>
 </code></pre></div>
-
 
 <p>Looking more closely at the ten most populated subgraphs, we get</p>
 <div class="codehilite"><pre><span></span><code><span class="n">julia</span><span class="o">&gt;</span> <span class="n">number_nodes</span><span class="p">[</span><span class="mi">1</span><span class="o">:</span><span class="mi">10</span><span class="p">]</span>
@@ -279,7 +267,6 @@ components:</p>
    <span class="mi">13</span>
 </code></pre></div>
 
-
 <p>So the largest subgraph has 5856 authors, whereas the second one has
 only 44 authors, which is less than 2 orders of magnitude lower.
 In fact, if we remove
@@ -288,7 +275,6 @@ the remaining subgraphs have in average only 3 authors.</p>
 <div class="codehilite"><pre><span></span><code><span class="n">julia</span><span class="o">&gt;</span> <span class="n">print</span><span class="p">(</span><span class="s">&quot;Average number of nodes: &quot;</span><span class="p">,</span> <span class="n">mean</span><span class="p">(</span><span class="n">number_nodes</span><span class="p">[</span><span class="mi">2</span><span class="o">:</span><span class="k">end</span><span class="p">]))</span>
 <span class="mf">3.0600375234521575</span>
 </code></pre></div>
-
 
 <p>So we could guess that almost all these micro-communities are issued by
 single articles.</p>
@@ -299,7 +285,6 @@ optimization community. In <code>LightGraphs</code> syntax, that translates to</
 <span class="n">sv</span> <span class="o">=</span> <span class="n">connected_components</span><span class="p">(</span><span class="n">g</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span>
 <span class="n">sg</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">induced_subgraph</span><span class="p">(</span><span class="n">g</span><span class="p">,</span> <span class="n">sv</span><span class="p">)</span>
 </code></pre></div>
-
 
 <p>The index <code>sv</code> allows to keep a correspondance between the indexes of the
 nodes in the largest connected component <code>sg</code> and the nodes in the original graph
@@ -315,11 +300,9 @@ graph:</p>
 <div class="codehilite"><pre><span></span><code><span class="n">deg</span> <span class="o">=</span> <span class="n">degree</span><span class="p">(</span><span class="n">sg</span><span class="p">)</span>
 </code></pre></div>
 
-
 <p>We also compute the diameter of our graph:</p>
 <div class="codehilite"><pre><span></span><code><span class="n">diam</span> <span class="o">=</span> <span class="n">diameter</span><span class="p">(</span><span class="n">sg</span><span class="p">)</span>
 </code></pre></div>
-
 
 <p>and print out basic information about the graph <code>sg</code>:</p>
 <div class="codehilite"><pre><span></span><code><span class="n">println</span><span class="p">(</span><span class="s">&quot;Nodes: &quot;</span><span class="p">,</span> <span class="n">nv</span><span class="p">(</span><span class="n">sg</span><span class="p">))</span>
@@ -330,7 +313,6 @@ graph:</p>
 <span class="n">println</span><span class="p">(</span><span class="s">&quot;Density: &quot;</span><span class="p">,</span> <span class="n">density</span><span class="p">(</span><span class="n">sg</span><span class="p">))</span>
 </code></pre></div>
 
-
 <div class="codehilite"><pre><span></span><code>Nodes: <span class="m">5856</span>
 Edges: <span class="m">16701</span>
 Max degree: <span class="m">152</span>
@@ -338,7 +320,6 @@ Average degree: <span class="m">5</span>.703893442622951
 Diameter: <span class="m">15</span>
 Density: <span class="m">0</span>.0009741918774761658
 </code></pre></div>
-
 
 <p>In plain English, that transposes to:</p>
 <ul>
@@ -351,7 +332,6 @@ Density: <span class="m">0</span>.0009741918774761658
 <p>If we look more closely at the distribution of the number of coauthors:</p>
 <div class="codehilite"><pre><span></span><code><span class="n">histogram</span><span class="p">(</span><span class="n">deg</span><span class="p">,</span> <span class="n">nbins</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span> <span class="n">xscale</span><span class="o">=</span><span class="n">log10</span><span class="p">)</span>
 </code></pre></div>
-
 
 <div class="codehilite"><pre><span></span><code>                  ┌                                        ┐
    [  0.0,   5.0) ┤▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇ 3617
@@ -389,7 +369,6 @@ Density: <span class="m">0</span>.0009741918774761658
                               Frequency [log10]
 </code></pre></div>
 
-
 <p>We observe that 3617 authors have less than 5 coauthors, and 5116 have
 less than 10 coauthors (that is, 87% of the community). The distribution
 is heavy-tailed, with only 25 authors having more than 50 coauthors.</p>
@@ -403,7 +382,6 @@ is heavy-tailed, with only 25 authors having more than 50 coauthors.</p>
 <span class="n">xlabel!</span><span class="p">(</span><span class="n">r</span><span class="p">,</span> <span class="s">&quot;log degree&quot;</span><span class="p">)</span>
 <span class="n">ylabel!</span><span class="p">(</span><span class="n">r</span><span class="p">,</span> <span class="s">&quot;|nodes|&quot;</span><span class="p">)</span>
 </code></pre></div>
-
 
 <div class="codehilite"><pre><span></span><code>           ┌────────────────────────────────────────┐
          4 │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀│
@@ -425,7 +403,6 @@ is heavy-tailed, with only 25 authors having more than 50 coauthors.</p>
            0                                        3
                           log degree
 </code></pre></div>
-
 
 <p>Here, we observe that the degree distribution has an asymptotic
 behavior when the degree <span class="math">\(k\)</span> becomes large. That would tend to
@@ -451,12 +428,10 @@ Bellman-Ford algorithm:</p>
 <span class="k">end</span>
 </code></pre></div>
 
-
 <p>We get as average distance in our graph:</p>
 <div class="codehilite"><pre><span></span><code><span class="n">julia</span><span class="o">&gt;</span> <span class="n">mean</span><span class="p">(</span><span class="n">avg_distance</span><span class="p">)</span>
 <span class="mf">6.244723488962793</span>
 </code></pre></div>
-
 
 <p>So, the average distance is equal to 6.2. In average, we could linked any
 pair of two authors by using less than 7 coauthorship relations.</p>
@@ -470,10 +445,8 @@ that his average shortest distance with other authors is the lowest.</p>
 <span class="n">name</span> <span class="o">=</span> <span class="n">get_name</span><span class="p">(</span><span class="n">original_index</span><span class="p">)</span>
 </code></pre></div>
 
-
 <div class="codehilite"><pre><span></span><code>&quot;Trelat, Emmanuel&quot;
 </code></pre></div>
-
 
 <p>So if we follow that metric, <a href="https://www.ljll.math.upmc.fr/trelat/">Emmanuel Trélat</a> is the most central author
 in the optimization community. This is not surprising, as Emmanuel Trélat is
@@ -532,7 +505,6 @@ according to a centrality measure <code>metrics</code>.</p>
 <span class="k">end</span>
 </code></pre></div>
 
-
 <p>As expected, we get different results if we use different centrality measures.
 We now look more closely at the 10 most central authors obtained with each
 centrality measure.</p>
@@ -540,7 +512,6 @@ centrality measure.</p>
 <p>We first compute a ranking based on <em>closeness centrality</em>.</p>
 <div class="codehilite"><pre><span></span><code><span class="n">rank</span><span class="p">(</span><span class="n">sg</span><span class="p">,</span> <span class="n">closeness_centrality</span><span class="p">)</span>
 </code></pre></div>
-
 
 <div class="codehilite"><pre><span></span><code>* #      (  Score) Name
 * 1    * (2.6e-01) Trelat, Emmanuel                    *
@@ -554,7 +525,6 @@ centrality measure.</p>
 * 9    * (2.3e-01) Delahaye, Daniel                    *
 * 10   * (2.3e-01) Caillau, Jean-Baptiste              *
 </code></pre></div>
-
 
 <p>As before, <a href="https://www.ljll.math.upmc.fr/trelat/">Emmanuel Trélat</a> is the most central author according to this
 measure, followed closely by <a href="https://homepages.laas.fr/henrion/">Didier Henrion</a> and <a href="http://homepages.laas.fr/lasserre/">Jean-Bernard Lasserre</a>
@@ -570,7 +540,6 @@ gives you a good score according to this measure.</p>
 <div class="codehilite"><pre><span></span><code><span class="n">rank</span><span class="p">(</span><span class="n">sg</span><span class="p">,</span> <span class="n">betweenness_centrality</span><span class="p">)</span>
 </code></pre></div>
 
-
 <div class="codehilite"><pre><span></span><code>* #      (  Score) Name
 * 1    * (1.4e-01) Trelat, Emmanuel                    *
 * 2    * (9.9e-02) Henrion, Didier                     *
@@ -584,7 +553,6 @@ gives you a good score according to this measure.</p>
 * 10   * (4.5e-02) Bergounioux, Maitine                *
 </code></pre></div>
 
-
 <p>We get the same two first authors as before with closeness centrality, but
 <a href="http://recherche.enac.fr/~delahaye/">Daniel Delahaye</a>, from ENAC, becomes the third most connected author, in place of
 <a href="http://homepages.laas.fr/lasserre/">Jean-Bernard Lasserre</a>.</p>
@@ -593,7 +561,6 @@ gives you a good score according to this measure.</p>
 <p>If we look now at <em>eigenvector centrality</em>, we get a different list:</p>
 <div class="codehilite"><pre><span></span><code><span class="n">rank</span><span class="p">(</span><span class="n">sg</span><span class="p">,</span> <span class="n">eigenvector_centrality</span><span class="p">)</span>
 </code></pre></div>
-
 
 <div class="codehilite"><pre><span></span><code>* #      (  Score) Name
 * 1    * (1.7e-01) Henrion, Didier                     *
@@ -608,7 +575,6 @@ gives you a good score according to this measure.</p>
 * 10   * (1.6e-01) Joldes, Mioara                      *
 </code></pre></div>
 
-
 <p>Most of the authors listed here are researchers affiliated to the <a href="https://www.laas.fr/public/">LAAS</a> laboratory.
 It appears that the largest eigenvalue of the adjacency matrix <span class="math">\(A\)</span> is "related",
 to some extent, to this laboratory. It would be interesting to observe
@@ -620,7 +586,6 @@ one.</p>
 the following results:</p>
 <div class="codehilite"><pre><span></span><code><span class="n">rank</span><span class="p">(</span><span class="n">sg</span><span class="p">,</span> <span class="n">pagerank</span><span class="p">)</span>
 </code></pre></div>
-
 
 <div class="codehilite"><pre><span></span><code>* #      (  Score) Name
 * 1    * (3.9e-03) Delahaye, Daniel                    *
@@ -634,7 +599,6 @@ the following results:</p>
 * 9    * (1.8e-03) Bergounioux, Maitine                *
 * 10   * (1.8e-03) Bach, Francis                       *
 </code></pre></div>
-
 
 <p>Again, the result looks different. <a href="https://www.ljll.math.upmc.fr/trelat/">Emmanuel Trélat</a> and <a href="https://homepages.laas.fr/henrion/">Didier Henrion</a> are
 still in the top, but the three top authors are now <a href="http://recherche.enac.fr/~delahaye/">Daniel Delahaye</a>,
@@ -651,12 +615,10 @@ periphery of the graph in less than 1 second.</p>
 <div class="codehilite"><pre><span></span><code><span class="n">core_periph</span> <span class="o">=</span> <span class="n">core_periphery_deg</span><span class="p">(</span><span class="n">sg</span><span class="p">)</span>
 </code></pre></div>
 
-
 <p>We could now extract the authors at the core of the community:</p>
 <div class="codehilite"><pre><span></span><code><span class="n">core_index</span> <span class="o">=</span> <span class="n">sv</span><span class="p">[</span><span class="n">findall</span><span class="p">(</span><span class="n">core_periph</span> <span class="o">.==</span> <span class="mi">1</span><span class="p">)]</span>
 <span class="n">core_names</span> <span class="o">=</span> <span class="n">get_name</span><span class="o">.</span><span class="p">(</span><span class="n">core_index</span><span class="p">)</span>
 </code></pre></div>
-
 
 <p>We write out this piece of code to print out the authors who are at
 the core of the community:</p>
@@ -676,7 +638,6 @@ the core of the community:</p>
 <span class="k">end</span>
 </code></pre></div>
 
-
 <div class="codehilite"><pre><span></span><code>* Bonnans, J. Frederic     * Zidani, Hasnaa           * Girard, Antoine
 * Bach, Francis            * Teytaud, Olivier         * Henrion, Didier
 * Sigalotti, Mario         * Gaubert, Stephane        * Trelat, Emmanuel
@@ -693,7 +654,6 @@ the core of the community:</p>
 * Houssin, Laurent         * Queinnec, I.             * Fliess, Michel
 * Join, Cedric
 </code></pre></div>
-
 
 <p>For anybody familiar with the French community, that would not come
 as a surprise. In fact, we recognize the most established researchers
