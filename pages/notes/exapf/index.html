@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<!-- Basic Metas -->
+	<meta charset="utf-8">
+	<title>Refactoring ExaPF: towards a vectorized modeler | François Pacaud</title>
+	<meta name="description" content="This note presents the new design of ExaPF in depth. It's primary goal is to foster the discussion, and details some ideas to implement a vectorized modeler in the near future. We highlight the points requiring a discussion with an item QX, with X denoting the number of the question …">
+	<meta name="author" content="">
+	<link rel="author" href=""/>
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+	<!-- Twitter Cards and Open Graph -->
+	<meta name="twitter:card" content="summary">
+	<meta name="twitter:creator" content="">
+	<meta name="twitter:domain" content="">
+	<meta name="twitter:site" content="">
+	<meta property="og:title" content="Refactoring ExaPF: towards a vectorized modeler">
+	<meta property="og:description" content="This note presents the new design of ExaPF in depth. It's primary goal is to foster the discussion, and details some ideas to implement a vectorized modeler in the near future. We highlight the points requiring a discussion with an item QX, with X denoting the number of the question …">
+	<meta property="og:image" content="frapac.github.io/images/icons/avatar.png">
+	<meta property="og:type" content="website">
+	<meta property="og:url" content="frapac.github.io/pages/">
+
+	<!-- Stylesheets and Web Fonts -->
+	<link href="/theme/style.min.css?8a1661c2" rel="stylesheet">
+	<link href="https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet">
+
+	<!-- Favicons -->
+	<link rel="apple-touch-icon" sizes="180x180" href="/images/icons/apple-touch-icon.png">
+	<link rel="icon" type="image/png" href="/images/icons/favicon-16x16.png" sizes="16x16">
+	<link rel="icon" type="image/png" href="/images/icons/favicon-32x32.png" sizes="32x32">
+	<meta name="theme-color" content="">
+
+	<meta name="msapplication-TileColor" content="">
+	<meta name="msapplication-TileImage" content="/images/icons/mstile-144x144.png">
+	<meta name="msapplication-square70x70logo" content="/images/icons/mstile-small.png">
+	<meta name="msapplication-square150x150logo" content="/images/icons/mstile-medium.png">
+	<meta name="msapplication-wide310x150logo" content="/images/icons/mstile-wide.png">
+	<meta name="msapplication-square310x310logo" content="/images/icons/mstile-large.png">
+
+	<!--[if lt IE 9]>
+	<script src="/theme/js/html5shiv.min.js"></script>
+	<script src="/theme/js/respond.min.js"></script>
+	<![endif]-->
+</head>
+
+<body>
+	<div class="container">
+		<aside>
+			<a href="/"><img id="avatar" alt="Site Avatar" src="/images/icons/avatar.png"></a>
+			<div id="name"><a href="/">François Pacaud</a></div>
+			<div id="bio">Postdoc @ Argonne National Lab</div>
+
+			<div id="sidebar-links">
+				<a href="/pages/about/">About</a>
+			</div>
+
+			<div id="social">
+				<a href="mailto:francoispacaud8+blog@gmail.com" title="Email (francoispacaud8+blog@gmail.com)" class="icon fa fa-envelope"></a>
+				<a href="http://github.com/frapac" title="GitHub" class="icon fa fa-github"></a>
+				<a href="https://scholar.google.fr/citations?user=W_KQN_sAAAAJ&hl=fr&oi=ao" title="Scholar" class="icon fa fa-flask"></a>
+				<a href="/atom.xml" title="Atom Feed" class="icon fa fa-rss"></a>
+			</div>
+            <hr>
+			<div id="sidebar-links">
+                <a href="/pages/articles/">Articles</a></br><a href="/pages/talks/">Talks</a></br><a href="/pages/teaching/">Teaching</a>
+			</div>
+            <hr>
+
+			<hr id="sidebar-divider">
+		</aside>
+
+		<article>
+	<h1 class="title"><a href="/pages/" title="Refactoring ExaPF: towards a vectorized modeler">Refactoring ExaPF: towards a vectorized modeler</a></h1>
+	<div class="content">
+		<p>This note presents the new design of ExaPF in depth. It's primary goal
+is to foster the discussion, and details some ideas to implement a
+vectorized modeler in the near future. We highlight the points
+requiring a discussion with an item <strong>QX</strong>, with <strong>X</strong> denoting
+the number of the question.</p>
+<h2>Why do we have to refactor ExaPF?</h2>
+<p>ExaPF has been written incrementally in 2020 and 2021, with new
+features added on the flow. The result was a code particularly hard
+to read, and hence, to maintain. The refactoring addresses this issue,
+and --- we hope --- improves the overall readability of the code. In
+addition, we add support to multi-generators per bus, and improve
+the modularity by being agnostic to the input variables (whereas
+before we were tight to the triplet <code>(vmag, vang, pgen)</code>).</p>
+<h2>Vectorized formalism</h2>
+<p>The refactoring is based on a vectorized formulation of the
+OPF, as introduced in <a href="https://arxiv.org/abs/1906.09483">Lee, Turitsyn, Molzahn, Roald (2020)</a>. Throughout this note, we will refer to this formulation as <strong>LTMR2020</strong>.
+It is equivalent to the classical polar formulation of the OPF.</p>
+<p>In what follows, we denote by <span class="math">\(v \in \mathbb{R}^{n_b}\)</span> the
+voltage magnitudes, <span class="math">\(\theta \in \mathbb{R}^{n_b}\)</span> the voltage
+angles and <span class="math">\(p_g, q_g \in \mathbb{R}^{n_g}\)</span> the active and
+reactive power generations. The active and reactive loads are denoted
+respectively by <span class="math">\(p_d, q_d \in \mathbb{R}^{n_b}\)</span>.</p>
+<h3>OPF Model</h3>
+<p>The idea is to factorize all nonlinearities inside a basis function
+depending both on the voltage magnitudes <span class="math">\(v\)</span> and voltage angles
+<span class="math">\(\theta\)</span>, such that <span class="math">\(\psi: \mathbb{R}^{n_b} \times \mathbb{R}^{n_b} \to \mathbb{R}^{2n_\ell + n_b}\)</span>.
+If we introduce the intermediate expressions
+</p>
+<div class="math">$$
+    \psi_\ell^C(v, \theta) = v^f  v^t  \cos(\theta_f - \theta_t) \quad \forall \ell = 1, \cdots, n_\ell \\
+    \psi_\ell^S(v, \theta) = v^f  v^t  \sin(\theta_f - \theta_t) \quad \forall \ell = 1, \cdots, n_\ell \\
+    \psi_k(v, \theta) = v_k^2 \quad \forall k = 1, \cdots, n_b
+$$</div>
+<p>
+the basis <span class="math">\(\psi\)</span> is defined as
+</p>
+<div class="math">$$
+    \psi(v, \theta) = [\psi_\ell^C(v, \theta)^\top ~ \psi_\ell^S(v, \theta)^\top ~ \psi_k(v, \theta)^\top ] \, .
+$$</div>
+<p>The basis <span class="math">\(\psi\)</span> implements all the nonlinearities in the problem. For instance,
+the power flow equations rewrite directly as
+</p>
+<div class="math">$$
+    \begin{bmatrix}
+    C_g p_g - p_d \\
+    C_g q_g - q_d
+    \end{bmatrix}
+    +
+    \underbrace{
+    \begin{bmatrix}
+    - \hat{G}^c &amp; - \hat{B}^s &amp; -G^d \\
+     \hat{B}^c &amp; - \hat{G}^s &amp; B^d
+    \end{bmatrix}
+    }_{M}
+    \psi(v, \theta)
+    = 0
+$$</div>
+<p>
+with <span class="math">\(C_g \in \mathbb{R}^{n_b \times n_g}\)</span> the bus-generators
+incidence matrix, and the matrices <span class="math">\(B, G\)</span> defined with the admittance
+matrix <span class="math">\(Y_b\)</span> of the network.</p>
+<p>Similarly, the line flows rewrite
+</p>
+<div class="math">$$
+    \begin{bmatrix}
+    s_p^f \\ s_q^f
+    \end{bmatrix}
+    =
+    \overbrace{
+    \begin{bmatrix}
+    G_{ft} &amp; B_{ft} &amp; G_{ff} C_f^\top \\
+    -B_{ft} &amp; G_{ft} &amp; -B_{ff} C_f^\top
+    \end{bmatrix}
+    }^{L_{line}^f}
+    \psi(v, \theta) \\
+    \begin{bmatrix}
+    s_p^t \\ s_q^t
+    \end{bmatrix}
+    =
+    \underbrace{
+    \begin{bmatrix}
+    G_{tf} &amp; B_{tf} &amp; G_{tt} C_t^\top \\
+    -B_{tf} &amp; G_{tf} &amp; -B_{tt} C_t^\top
+    \end{bmatrix}
+    }_{L_{line}^t}
+    \psi(v, \theta)
+$$</div>
+<p>
+with <span class="math">\(C_f \in \mathbb{R}^{n_b \times n_\ell}\)</span> the bus-from incidence
+matrix and <span class="math">\(C_t \in \mathbb{R}^{n_b \times n_\ell}\)</span> the bus-to incidence
+matrix. Then, the line flows constraints write directly with the quadratic expressions:
+</p>
+<div class="math">$$
+    (s_p^f)^2 + (s_q^f)^2 \leq (s^{max})^2 \quad \, ,
+    (s_p^t)^2 + (s_q^t)^2 \leq (s^{max})^2 \quad \, .
+$$</div>
+<h3>Why is this model advantageous?</h3>
+<p>Implementing the model <strong>LTMR2020</strong> is not difficult
+once the basis function <span class="math">\(\psi\)</span> has been defined. Indeed,
+if we select a subset of the power flow equations (as usual, associated
+to the active injections at PV nodes, and active and reactive injections
+at PQ nodes), we get
+</p>
+<div class="math">$$
+    C_{eq} p_g + M_{eq} \psi + \tau = 0
+$$</div>
+<p>
+with <span class="math">\(C_{eq}\)</span> defined from the bus-generator incidence matrix <span class="math">\(C_g\)</span>, <span class="math">\(M_{eq}\)</span>
+a subset of the matrix <span class="math">\(M\)</span>, <span class="math">\(\tau\)</span> a constant depending on the loads in
+the problem. Note that <span class="math">\(C_{eq}\)</span> and <span class="math">\(M_{eq}\)</span> are sparse matrices, so the
+expression can be implemented efficiently with sparse linear algebra
+operations (2 SpMV operations, 2 vector additions).
+The same holds true for the line flow constraints,
+evaluated with 2 SpMV operations:
+</p>
+<div class="math">$$
+    s^f = L_{line}^f \psi \, , \quad
+    s^t = L_{line}^t \psi \, .
+$$</div>
+<p>That explains the underlying motivation of the refactoring: rewrite all
+the kernels in ExaPF with sparse operations porting on the nonlinear basis
+<span class="math">\(\psi\)</span>. The previous code was dealing explicitly with the unstructured sparsity
+of the power flow problem, leading to inefficiency. Now, the unstructured
+sparsity is delegated to the underlying sparse library (<code>cusparse</code> on CUDA GPU,
+<code>SuiteSparse</code> on the CPU). Indeed, we think that the vendor libraries are
+more optimized than our custom kernels. Furthermore, on the GPU, we will directly
+benefit from the improvements in <code>cusparse</code>, as</p>
+<ul>
+<li>the new function <a href="https://docs.nvidia.com/cuda/cusparse/index.html#cusparse-generic-function-spmv">cusparseSpMV</a></li>
+<li>the <a href="https://developer.nvidia.com/blog/accelerating-matrix-multiplication-with-block-sparse-format-and-nvidia-tensor-cores/">new tensor core operations</a>.</li>
+</ul>
+<p>In what follows, we detail our implementation of the <strong>LTMR2020</strong> model.</p>
+<h2>Implementation</h2>
+<p>We have implemented the LTMR2020 model in ExaPF, both on the CPU
+and on CUDA GPU. All the operations have been rewritten in a
+vectorized fashion. Every model depends on <em>inputs</em> we propagate
+forward with <em>functions</em>. In ExaPF, the inputs will be specified
+in a <code>NetworkStack &lt;: AbstractStack</code>. The functions will be implemented
+as <code>AbstractExpressions</code>.</p>
+<h3>Specifying inputs in <code>NetworkStack</code></h3>
+<p>Our three inputs are <span class="math">\((v, \theta, p_g) \in \mathbb{R}^{2n_b + n_g}\)</span> (voltage magnitude, voltage
+angle, power generations).
+The basis <span class="math">\(\psi\)</span> is considered as an intermediate expression.</p>
+<ul>
+<li><strong>Q1</strong>: <em>Shall we consider the loads in the input as well?</em></li>
+</ul>
+<p>We store all inputs in a <code>NetworkStack</code> structure:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">struct</span> <span class="kt">NetworkStack</span><span class="p">{</span><span class="kt">VT</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="kt">AbstractStack</span>
+    <span class="n">input</span><span class="o">::</span><span class="kt">VT</span>
+    <span class="n">vmag</span><span class="o">::</span><span class="kt">VT</span> <span class="c"># voltage magnitudes (view)</span>
+    <span class="n">vang</span><span class="o">::</span><span class="kt">VT</span> <span class="c"># voltage angles (view)</span>
+    <span class="n">pgen</span><span class="o">::</span><span class="kt">VT</span> <span class="c"># active power generations (view)</span>
+    <span class="n">ψ</span><span class="o">::</span><span class="kt">VT</span>    <span class="c"># nonlinear basis ψ(vmag, vang)</span>
+<span class="k">end</span>
+</code></pre></div>
+
+<ul>
+<li><strong>Q2</strong>: <em>Is <code>NetworkStack</code> an appropriate name? And in general, are all names appropriate?</em></li>
+</ul>
+<p>All the inputs are specified in the vector <code>input</code>. The three vectors
+<code>vmag</code>, <code>vang</code> and <code>pgen</code> are views porting on <code>input</code>, and are defined
+mostly for convenience. By convention the vector <code>input</code> is ordered
+as <code>[vmag; vang; pgen]</code>:</p>
+<div class="codehilite"><pre><span></span><code><span class="c"># Define dimension of the problem</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">nbus</span><span class="p">,</span> <span class="n">ngen</span><span class="p">,</span> <span class="n">nlines</span> <span class="o">=</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">4</span>
+<span class="c"># Instantiate stack</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">stack</span> <span class="o">=</span> <span class="n">ExaPF</span><span class="o">.</span><span class="n">NetworkStack</span><span class="p">(</span><span class="n">nbus</span><span class="p">,</span> <span class="n">ngen</span><span class="p">,</span> <span class="n">nlines</span><span class="p">,</span> <span class="kt">Vector</span><span class="p">{</span><span class="kt">Float64</span><span class="p">});</span>
+
+<span class="c"># Look at values in input</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">stack</span><span class="o">.</span><span class="n">input</span><span class="o">&#39;</span>
+<span class="mi">1</span><span class="o">×</span><span class="mi">8</span> <span class="n">adjoint</span><span class="p">(</span><span class="o">::</span><span class="kt">Vector</span><span class="p">{</span><span class="kt">Float64</span><span class="p">})</span> <span class="n">with</span> <span class="n">eltype</span> <span class="kt">Float64</span><span class="o">:</span>
+ <span class="mf">0.0</span>  <span class="mf">0.0</span>  <span class="mf">0.0</span>  <span class="mf">0.0</span>  <span class="mf">0.0</span>  <span class="mf">0.0</span>  <span class="mf">0.0</span>  <span class="mf">0.0</span>
+
+<span class="c"># Modify values in views</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">stack</span><span class="o">.</span><span class="n">vmag</span> <span class="o">.=</span> <span class="mi">1</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">stack</span><span class="o">.</span><span class="n">vang</span> <span class="o">.=</span> <span class="mi">2</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">stack</span><span class="o">.</span><span class="n">pgen</span> <span class="o">.=</span> <span class="mi">3</span>
+<span class="c"># Look again at the values in input:</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">stack</span><span class="o">.</span><span class="n">input</span><span class="o">&#39;</span>
+<span class="mi">1</span><span class="o">×</span><span class="mi">8</span> <span class="n">adjoint</span><span class="p">(</span><span class="o">::</span><span class="kt">Vector</span><span class="p">{</span><span class="kt">Float64</span><span class="p">})</span> <span class="n">with</span> <span class="n">eltype</span> <span class="kt">Float64</span><span class="o">:</span>
+ <span class="mf">1.0</span>  <span class="mf">1.0</span>  <span class="mf">1.0</span>  <span class="mf">2.0</span>  <span class="mf">2.0</span>  <span class="mf">2.0</span>  <span class="mf">3.0</span>  <span class="mf">3.0</span>
+</code></pre></div>
+
+<p>The basis vector <code>ψ</code> is an intermediate expression,
+whose values depend on the inputs.</p>
+<h3>Defining a state and a control</h3>
+<p>In the reduced space method, we have to split the variables
+in a <em>state</em> <span class="math">\(x\)</span> and a <em>control</em> <span class="math">\(u\)</span>. By default, we define
+</p>
+<div class="math">$$
+    x = (\theta_{pv}, \theta_{pq}, v_{pq}) \, , \quad
+    x = (v_{ref}, v_{pv}, p_{g,genpv}) \,.
+$$</div>
+<p>
+The previous implementation used a fixed indexing for the state
+and the control, and was not flexible. In the new implementation,
+we define the state and the control as two <em>mappings</em> porting
+on the vector <code>stack.input</code> (which itself stores all the inputs in
+the problem):</p>
+<div class="codehilite"><pre><span></span><code><span class="c"># Define dimension of the problem</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">nbus</span><span class="p">,</span> <span class="n">ngen</span><span class="p">,</span> <span class="n">nlines</span> <span class="o">=</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">4</span>
+<span class="c"># Instantiate stack</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">stack</span> <span class="o">=</span> <span class="n">ExaPF</span><span class="o">.</span><span class="n">NetworkStack</span><span class="p">(</span><span class="n">nbus</span><span class="p">,</span> <span class="n">ngen</span><span class="p">,</span> <span class="n">nlines</span><span class="p">,</span> <span class="kt">Vector</span><span class="p">{</span><span class="kt">Float64</span><span class="p">});</span>
+<span class="c"># Define pv, pq, genpv</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">ref</span><span class="p">,</span> <span class="n">pv</span><span class="p">,</span> <span class="n">pq</span><span class="p">,</span> <span class="n">genpv</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="p">[</span><span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">],</span> <span class="p">[</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">]</span>
+<span class="c"># Define state as a mapping on stack.input</span>
+<span class="c"># Remember that ordering of input is [vmag, vang, pgen]!</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">mapx</span> <span class="o">=</span> <span class="p">[</span><span class="n">nbus</span> <span class="o">.+</span> <span class="n">pv</span><span class="p">;</span> <span class="n">nbus</span> <span class="o">.+</span> <span class="n">pq</span><span class="p">;</span> <span class="n">pq</span><span class="p">]</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">mapu</span> <span class="o">=</span> <span class="p">[</span><span class="n">ref</span><span class="p">;</span> <span class="n">pv</span><span class="p">;</span> <span class="n">genpv</span><span class="p">]</span>
+<span class="c"># Load values for state and control</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">x</span> <span class="o">=</span> <span class="nd">@view</span> <span class="n">stack</span><span class="o">.</span><span class="n">input</span><span class="p">[</span><span class="n">mapx</span><span class="p">]</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">u</span> <span class="o">=</span> <span class="nd">@view</span> <span class="n">stack</span><span class="o">.</span><span class="n">input</span><span class="p">[</span><span class="n">mapu</span><span class="p">]</span>
+</code></pre></div>
+
+<p>By doing so, the values of the state and the control are directly
+stored inside the <code>NetworkStack</code> structure, avoiding to duplicate values
+in the memory.</p>
+<h3>Nonlinear basis</h3>
+<p>Now that we have defined the inputs, we can compute the
+values in the intermediate vector <code>ψ</code>.
+In the new implementation,
+the nonlinear basis is evaluated with a <a href="https://github.com/exanauts/ExaPF.jl/blob/fp/refactoring/src/Polar/functions.jl#L127-L152">custom kernel</a>.</p>
+<ul>
+<li><strong>Q3</strong>: <em>how to improve the implementation of the nonlinear basis <span class="math">\(\psi\)</span> on the GPU?</em></li>
+</ul>
+<h3>Writing vectorized functions with <code>AbstractExpressions</code></h3>
+<p>On the basis <span class="math">\(\psi\)</span> computed, we can evaluate all the remaining expressions
+in our optimal power flow problem. We introduce a new abstraction to define
+all the functions in a modular way:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">abstract type</span> <span class="kt">AbstractExpression</span> <span class="k">end</span>
+</code></pre></div>
+
+<p>All expressions will derive from this <code>AbstractExpression</code> type. We attach
+two methods to each instance <code>func</code> of <code>AbstractExpression</code>:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">function</span> <span class="p">(</span><span class="n">func</span><span class="o">::</span><span class="kt">AbstractExpression</span><span class="p">)(</span><span class="n">output</span><span class="o">::</span><span class="kt">AbstractVector</span><span class="p">,</span> <span class="n">stack</span><span class="o">::</span><span class="kt">AbstractStack</span><span class="p">)</span>
+
+<span class="k">function</span> <span class="n">adjoint!</span><span class="p">(</span><span class="n">func</span><span class="o">::</span><span class="kt">AbstractExpression</span><span class="p">,</span> <span class="n">adj_stack</span><span class="o">::</span><span class="kt">AbstractStack</span><span class="p">,</span> <span class="n">stack</span><span class="o">::</span><span class="kt">AbstractStack</span><span class="p">,</span> <span class="n">y</span><span class="o">::</span><span class="kt">AbstractVector</span><span class="p">)</span>
+</code></pre></div>
+
+<p>The first function allows to evaluate the expression and stores the result
+in the vector <code>output</code>. The second function computes the adjoint of the given
+expression on the current <code>stack</code> and dual values <code>y</code>. The results are stored inplace in
+the adjoint stack <code>adj_stack</code>.
+In the AutoDiff interpretation, the first function is the <em>forward</em> operator, whereas
+the second one is the <em>backward</em> operator.
+If the two functions are compatible with <code>ForwardDiff</code>, we allow the code to be fully differentiable.</p>
+<p>As an example, we detail the implementation of the power flow balance.
+We recall that the mathematical expression of the power flow balance are in
+the <strong>LTMR2020</strong> formalism:
+</p>
+<div class="math">$$
+    output = C_{eq} p_g + M_{eq} \psi + \tau
+$$</div>
+<p>
+The power flow takes as input the power generation <span class="math">\(p_g\)</span> and the
+nonlinear basis <span class="math">\(\psi\)</span>. Both <span class="math">\(C_{eq}\)</span> and <span class="math">\(M_{eq}\)</span> are sparse matrices.
+That translates to the following structure:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">struct</span> <span class="kt">PowerFlowBalance</span><span class="p">{</span><span class="kt">VT</span><span class="p">,</span> <span class="kt">MT</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="kt">AbstractExpression</span>
+    <span class="n">M</span><span class="o">::</span><span class="kt">MT</span>
+    <span class="n">Cg</span><span class="o">::</span><span class="kt">MT</span>
+    <span class="n">τ</span><span class="o">::</span><span class="kt">VT</span>
+<span class="k">end</span>
+</code></pre></div>
+
+<p>whose associated function and adjoint are defined entirely in
+term of sparse linear algebra operations (using the <code>mul!</code> operator to
+ensure we dispatch on BLAS whenever we can):</p>
+<div class="codehilite"><pre><span></span><code><span class="k">function</span> <span class="p">(</span><span class="n">func</span><span class="o">::</span><span class="kt">PowerFlowBalance</span><span class="p">)(</span><span class="n">output</span><span class="p">,</span> <span class="n">state</span><span class="p">)</span>
+    <span class="n">output</span> <span class="o">.=</span> <span class="n">func</span><span class="o">.</span><span class="n">τ</span>
+    <span class="n">mul!</span><span class="p">(</span><span class="n">output</span><span class="p">,</span> <span class="n">func</span><span class="o">.</span><span class="n">M</span><span class="p">,</span> <span class="n">state</span><span class="o">.</span><span class="n">ψ</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">)</span>     <span class="c"># muladd</span>
+    <span class="n">mul!</span><span class="p">(</span><span class="n">output</span><span class="p">,</span> <span class="n">func</span><span class="o">.</span><span class="n">Cg</span><span class="p">,</span> <span class="n">state</span><span class="o">.</span><span class="n">pgen</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">)</span> <span class="c"># muladd</span>
+    <span class="k">return</span>
+<span class="k">end</span>
+
+<span class="k">function</span> <span class="n">adjoint!</span><span class="p">(</span><span class="n">func</span><span class="o">::</span><span class="kt">PowerFlowBalance</span><span class="p">,</span> <span class="n">∂state</span><span class="p">,</span> <span class="n">state</span><span class="p">,</span> <span class="n">∂v</span><span class="p">)</span>
+    <span class="n">mul!</span><span class="p">(</span><span class="n">∂state</span><span class="o">.</span><span class="n">ψ</span><span class="p">,</span> <span class="n">func</span><span class="o">.</span><span class="n">M</span><span class="o">&#39;</span><span class="p">,</span> <span class="n">∂v</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">)</span>
+    <span class="n">mul!</span><span class="p">(</span><span class="n">∂state</span><span class="o">.</span><span class="n">pgen</span><span class="p">,</span> <span class="n">func</span><span class="o">.</span><span class="n">Cg</span><span class="o">&#39;</span><span class="p">,</span> <span class="n">∂v</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">)</span>
+    <span class="k">return</span>
+<span class="k">end</span>
+</code></pre></div>
+
+<p>All the other expressions are implemented in a similar fashion.</p>
+<h3>Composing expressions together</h3>
+<p>Now we have a formalism to define expressions, it remains to compose them together.
+Currently, we have implemented two operations: concatenation and (function) composition.</p>
+<p>The concatenation of several expressions is defined by the structure <code>MultiExpressions</code>:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">struct</span> <span class="kt">MultiExpressions</span> <span class="o">&lt;:</span> <span class="kt">AbstractExpression</span>
+    <span class="n">exprs</span><span class="o">::</span><span class="kt">Vector</span><span class="p">{</span><span class="kt">AbstractExpression</span><span class="p">}</span>
+<span class="k">end</span>
+</code></pre></div>
+
+<p>By using that structure, we can evaluate jointly all the expressions stored
+inside the field <code>exprs</code>. For instance, if we want to evaluate jointly the
+power flow balance and the line flow constraints:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">julia</span><span class="o">&gt;</span> <span class="n">powerflow</span> <span class="o">=</span> <span class="n">PowerFlowBalance</span><span class="p">(</span><span class="n">model</span><span class="p">)</span> <span class="c"># instantiate powerflow expression</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">lineflows</span> <span class="o">=</span> <span class="n">PowerFlowBalance</span><span class="p">(</span><span class="n">model</span><span class="p">)</span> <span class="c"># instantiate lineflow expression</span>
+<span class="c"># Load multi-expression</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">joint_function</span> <span class="o">=</span> <span class="n">MultiExpressions</span><span class="p">([</span><span class="n">powerflow</span><span class="p">,</span> <span class="n">lineflows</span><span class="p">])</span>
+
+<span class="c"># Joint evaluation of powerflow and lineflows:</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">output</span> <span class="o">=</span> <span class="n">zeros</span><span class="p">(</span><span class="n">length</span><span class="p">(</span><span class="n">joint_function</span><span class="p">))</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">joint_function</span><span class="p">(</span><span class="n">output</span><span class="p">,</span> <span class="n">stack</span><span class="p">)</span>
+
+<span class="c"># Joint propagation of adjoint:</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">y</span> <span class="o">=</span> <span class="n">rand</span><span class="p">(</span><span class="n">length</span><span class="p">(</span><span class="n">joint_function</span><span class="p">))</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">adjoint!</span><span class="p">(</span><span class="n">joint_function</span><span class="p">,</span> <span class="n">adj_stack</span><span class="p">,</span> <span class="n">stack</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+</code></pre></div>
+
+<p>More important is the composition operator, to pipe different expressions
+together. Indeed, most of the time, we want to first evaluate the nonlinear
+basis <span class="math">\(\psi\)</span> (and update the values in the intermediate vector <code>stack.ψ</code>)
+before evaluating our expression <code>func</code>.
+To do that, we have implemented a <code>ComposedExpressions</code> structure:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">struct</span> <span class="kt">ComposedExpressions</span><span class="p">{</span><span class="kt">Expr1</span><span class="p">,</span> <span class="kt">Expr2</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="kt">AbstractExpression</span>
+    <span class="n">inner</span><span class="o">::</span><span class="kt">Expr1</span>
+    <span class="n">outer</span><span class="o">::</span><span class="kt">Expr2</span>
+<span class="k">end</span>
+</code></pre></div>
+
+<p>which overloads the <code>∘</code> operator in Julia. That way, we can define
+our composed expressions simply as:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">julia</span><span class="o">&gt;</span> <span class="n">basis</span> <span class="o">=</span> <span class="n">PolarBasis</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>  <span class="c"># instantiate basis expression</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">powerflow</span> <span class="o">=</span> <span class="n">PowerFlowBalance</span><span class="p">(</span><span class="n">model</span><span class="p">)</span> <span class="c"># instantiate powerflow expression</span>
+
+<span class="c"># Define composed expression:</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">myfunc</span> <span class="o">=</span> <span class="n">powerflow</span> <span class="o">∘</span> <span class="n">basis</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">output</span> <span class="o">=</span> <span class="n">zeros</span><span class="p">(</span><span class="n">length</span><span class="p">(</span><span class="n">myfunc</span><span class="p">))</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">myfunc</span><span class="p">(</span><span class="n">output</span><span class="p">,</span> <span class="n">stack</span><span class="p">)</span> <span class="c"># first evaluate basis, then powerflow</span>
+</code></pre></div>
+
+<ul>
+<li><strong>Q4</strong>: <em>Would it make sense to overload other operations (<code>+</code>, <code>x</code>,...) to get a proto-modeler?</em></li>
+</ul>
+<h3>Extracting Jacobians and Hessians</h3>
+<p>Once the forward and the reverse (<code>adjoint!</code>) operator defined, it is easy
+to compute the Jacobian and the Hessian of the different expressions
+with ForwardDiff. For instance, using forward-mode AD, the code for
+the Jacobian writes:</p>
+<div class="codehilite"><pre><span></span><code><span class="c"># jac.stack is a stack with type VD = Vector{ForwardDiff.Dual{Float64, N}}</span>
+<span class="n">jac</span><span class="o">.</span><span class="n">stack</span><span class="o">.</span><span class="n">input</span> <span class="o">.=</span> <span class="n">state</span><span class="o">.</span><span class="n">input</span>
+<span class="n">jac</span><span class="o">.</span><span class="n">t1sF</span> <span class="o">.=</span> <span class="mf">0.0</span>
+<span class="c"># seed</span>
+<span class="n">seed!</span><span class="p">(</span><span class="n">jac</span><span class="o">.</span><span class="n">stack</span><span class="p">,</span> <span class="n">state</span><span class="p">,</span> <span class="n">jac</span><span class="o">.</span><span class="n">t1sseeds</span><span class="p">,</span> <span class="n">jac</span><span class="o">.</span><span class="n">map</span><span class="p">,</span> <span class="n">jac</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+<span class="c"># forward pass</span>
+<span class="n">jac</span><span class="o">.</span><span class="n">func</span><span class="p">(</span><span class="n">jac</span><span class="o">.</span><span class="n">t1sF</span><span class="p">,</span> <span class="n">jac</span><span class="o">.</span><span class="n">stack</span><span class="p">)</span>
+<span class="c"># uncompress</span>
+<span class="n">AutoDiff</span><span class="o">.</span><span class="n">partials!</span><span class="p">(</span><span class="n">jac</span><span class="o">.</span><span class="n">compressedJ</span><span class="p">,</span> <span class="n">jac</span><span class="o">.</span><span class="n">t1sF</span><span class="p">,</span> <span class="n">jac</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+<span class="n">AutoDiff</span><span class="o">.</span><span class="n">uncompress!</span><span class="p">(</span><span class="n">jac</span><span class="o">.</span><span class="n">J</span><span class="p">,</span> <span class="n">jac</span><span class="o">.</span><span class="n">compressedJ</span><span class="p">,</span> <span class="n">jac</span><span class="o">.</span><span class="n">coloring</span><span class="p">,</span> <span class="n">jac</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+</code></pre></div>
+
+<p>We define a <code>Jacobian</code> object to implement these operations.
+The constructor of <code>Jacobian</code> takes as input a <code>model</code>, an expression <code>func</code> and
+a mapping <code>map</code> porting on the input in <code>stack</code>. The mapping allows to compute
+the Jacobian w.r.t. any combinations of inputs. For instance,
+to evaluate the Jacobian w.r.t. the state <span class="math">\(x\)</span> (defined as a mapping <code>mapx</code>), we just have to instantiate
+the <code>Jacobian</code> object as:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">julia</span><span class="o">&gt;</span> <span class="n">jac</span> <span class="o">=</span> <span class="n">Jacobian</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">func</span><span class="p">,</span> <span class="n">mapx</span><span class="p">)</span>
+</code></pre></div>
+
+<p>To evaluate the Jacobian both with relation to the state <span class="math">\(x\)</span> and the control <span class="math">\(u\)</span>,
+we just have to concatenate the two mappings <code>mapx</code> and <code>mapu</code> together:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">julia</span><span class="o">&gt;</span> <span class="n">jac</span> <span class="o">=</span> <span class="n">Jacobian</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">func</span><span class="p">,</span> <span class="p">[</span><span class="n">mapx</span> <span class="p">;</span> <span class="n">mapu</span><span class="p">])</span>
+</code></pre></div>
+
+<p>As an example, the power flow solver requires to evaluate the Jacobian
+of the <code>PowerFlowBalance</code> expression with relation to the state <code>x</code>. This
+translates to:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">julia</span><span class="o">&gt;</span> <span class="n">basis</span> <span class="o">=</span> <span class="n">PolarBasis</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>  <span class="c"># instantiate basis expression</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">powerflow</span> <span class="o">=</span> <span class="n">PowerFlowBalance</span><span class="p">(</span><span class="n">model</span><span class="p">)</span> <span class="c"># instantiate powerflow expression</span>
+<span class="c"># used a composed expression to get all the forward pass:</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">myfunc</span> <span class="o">=</span> <span class="n">powerflow</span> <span class="o">∘</span> <span class="n">basis</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">jac</span> <span class="o">=</span> <span class="n">Jacobian</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">myfunc</span><span class="p">,</span> <span class="n">mapx</span><span class="p">)</span>
+<span class="c"># Evaluate Jacobian on current stack</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">J</span> <span class="o">=</span> <span class="n">jacobian!</span><span class="p">(</span><span class="n">jac</span><span class="p">,</span> <span class="n">stack</span><span class="p">)</span>
+<span class="mi">53</span><span class="o">×</span><span class="mi">53</span> <span class="n">SparseArrays</span><span class="o">.</span><span class="kt">SparseMatrixCSC</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span> <span class="kt">Int64</span><span class="p">}</span> <span class="n">with</span> <span class="mi">361</span> <span class="n">stored</span> <span class="n">entries</span><span class="o">:</span>
+<span class="n">⠑⢄⠀⠉⠁⠀⠄⠂⡀⠀⠀⢤⠀⠀⠀⠉⠁⠀⠄⠂⡀⠀⠀⢤⠀⠀⠀</span>
+<span class="n">⡄⠀⠱⢆⢄⠀⠀⠄⠀⠀⠀⠀⠁⠉⠱⢆⢄⠀⠀⠄⠀⠀⠀⠀⠁⠉⠁</span>
+<span class="n">⠁⠀⠀⠑⡟⢍⣁⠀⠀⠀⠀⠀⠀⠅⠀⠑⡟⢍⣁⠀⠀⠀⠀⠀⠀⠅⠀</span>
+<span class="n">⠠⠁⠀⠄⠁⠘⠑⣤⡤⠁⠈⠁⠀⠀⠀⠄⠁⠘⠑⣤⡤⠁⠈⠁⠀⠀⠀</span>
+<span class="n">⠀⠈⠀⠀⠀⠀⠄⠋⡱⢎⡀⠀⠀⠀⠀⠀⠀⠀⠄⠋⡱⢎⡀⠀⠀⠀⠀</span>
+<span class="n">⠀⣄⠀⠀⠀⠀⠆⠀⠀⠈⠛⢄⡀⠀⠀⠀⠀⠀⠆⠀⠀⠈⠛⢄⡀⠀⠀</span>
+<span class="n">⠀⠀⡅⠀⠄⠄⠀⠀⠀⠀⠀⠈⠛⢄⡀⠀⠄⠄⠀⠀⠀⠀⠀⠈⠛⢄⡀</span>
+<span class="n">⡄⠀⠱⢆⢄⠀⠀⠄⠀⠀⠀⠀⠀⠈⠱⢆⢄⠀⠀⠄⠀⠀⠀⠀⠀⠈⠁</span>
+<span class="n">⠁⠀⠀⠑⡟⢍⣁⠀⠀⠀⠀⠀⠀⠅⠀⠑⡟⢍⣁⠀⠀⠀⠀⠀⠀⠅⠀</span>
+<span class="n">⠠⠁⠀⠄⠁⠘⠑⣤⡤⠁⠈⠁⠀⠀⠀⠄⠁⠘⠑⣤⡤⠁⠈⠁⠀⠀⠀</span>
+<span class="n">⠀⠈⠀⠀⠀⠀⠄⠋⡱⢎⡀⠀⠀⠀⠀⠀⠀⠀⠄⠋⡱⢎⡀⠀⠀⠀⠀</span>
+<span class="n">⠀⣄⠀⠀⠀⠀⠆⠀⠀⠈⠛⢄⡀⠀⠀⠀⠀⠀⠆⠀⠀⠈⠛⢄⡀⠀⠀</span>
+<span class="n">⠀⠀⡅⠀⠄⠄⠀⠀⠀⠀⠀⠈⠛⢄⡀⠀⠄⠄⠀⠀⠀⠀⠀⠈⠛⢄⡀</span>
+<span class="n">⠀⠀⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠁</span>
+</code></pre></div>
+
+<p>The Hessian is defined in a similar fashion, using forward-over-reverse:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">julia</span><span class="o">&gt;</span> <span class="n">hess</span> <span class="o">=</span> <span class="n">FullHessian</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">myfunc</span><span class="p">,</span> <span class="n">mapx</span><span class="p">)</span>
+<span class="c"># Evaluate Hessian on current stack and multiplier y:</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">y</span> <span class="o">=</span> <span class="n">rand</span><span class="p">(</span><span class="n">length</span><span class="p">(</span><span class="n">myfunc</span><span class="p">))</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">H</span> <span class="o">=</span> <span class="n">hessian!</span><span class="p">(</span><span class="n">hess</span><span class="p">,</span> <span class="n">stack</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+<span class="mi">53</span><span class="o">×</span><span class="mi">53</span> <span class="n">SparseArrays</span><span class="o">.</span><span class="kt">SparseMatrixCSC</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span> <span class="kt">Int64</span><span class="p">}</span> <span class="n">with</span> <span class="mi">361</span> <span class="n">stored</span> <span class="n">entries</span><span class="o">:</span>
+<span class="n">⠑⢄⠀⠉⠁⠀⠄⠂⡀⠀⠀⢤⠀⠀⠀⠉⠁⠀⠄⠂⡀⠀⠀⢤⠀⠀⠀</span>
+<span class="n">⡄⠀⠱⢆⢄⠀⠀⠄⠀⠀⠀⠀⠁⠉⠱⢆⢄⠀⠀⠄⠀⠀⠀⠀⠁⠉⠁</span>
+<span class="n">⠁⠀⠀⠑⡟⢍⣁⠀⠀⠀⠀⠀⠀⠅⠀⠑⡟⢍⣁⠀⠀⠀⠀⠀⠀⠅⠀</span>
+<span class="n">⠠⠁⠀⠄⠁⠘⠑⣤⡤⠁⠈⠁⠀⠀⠀⠄⠁⠘⠑⣤⡤⠁⠈⠁⠀⠀⠀</span>
+<span class="n">⠀⠈⠀⠀⠀⠀⠄⠋⡱⢎⡀⠀⠀⠀⠀⠀⠀⠀⠄⠋⡱⢎⡀⠀⠀⠀⠀</span>
+<span class="n">⠀⣄⠀⠀⠀⠀⠆⠀⠀⠈⠛⢄⡀⠀⠀⠀⠀⠀⠆⠀⠀⠈⠛⢄⡀⠀⠀</span>
+<span class="n">⠀⠀⡅⠀⠄⠄⠀⠀⠀⠀⠀⠈⠛⢄⡀⠀⠄⠄⠀⠀⠀⠀⠀⠈⠛⢄⡀</span>
+<span class="n">⡄⠀⠱⢆⢄⠀⠀⠄⠀⠀⠀⠀⠀⠈⠱⢆⢄⠀⠀⠄⠀⠀⠀⠀⠀⠈⠁</span>
+<span class="n">⠁⠀⠀⠑⡟⢍⣁⠀⠀⠀⠀⠀⠀⠅⠀⠑⡟⢍⣁⠀⠀⠀⠀⠀⠀⠅⠀</span>
+<span class="n">⠠⠁⠀⠄⠁⠘⠑⣤⡤⠁⠈⠁⠀⠀⠀⠄⠁⠘⠑⣤⡤⠁⠈⠁⠀⠀⠀</span>
+<span class="n">⠀⠈⠀⠀⠀⠀⠄⠋⡱⢎⡀⠀⠀⠀⠀⠀⠀⠀⠄⠋⡱⢎⡀⠀⠀⠀⠀</span>
+<span class="n">⠀⣄⠀⠀⠀⠀⠆⠀⠀⠈⠛⢄⡀⠀⠀⠀⠀⠀⠆⠀⠀⠈⠛⢄⡀⠀⠀</span>
+<span class="n">⠀⠀⡅⠀⠄⠄⠀⠀⠀⠀⠀⠈⠛⢄⡀⠀⠄⠄⠀⠀⠀⠀⠀⠈⠛⢄⡀</span>
+<span class="n">⠀⠀⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠁</span>
+</code></pre></div>
+
+<p>Note that both the computations of the Jacobian of the Hessians
+manipulate vectors of duals numbers. Hence, the code of <code>myfunc</code> and
+its adjoint should be fully differentiable. This is not an issue on the
+CPU, but this is not trivial when we evaluate the derivatives
+on the GPU. Indeed, most expressions are defined with sparse operations
+like <code>SpMV</code>. For instance, the forward code</p>
+<div class="codehilite"><pre><span></span><code><span class="n">mul!</span><span class="p">(</span><span class="n">yd</span><span class="p">,</span> <span class="n">M</span><span class="p">,</span> <span class="n">xd</span><span class="p">)</span>
+</code></pre></div>
+
+<p>translates in the adjoint as</p>
+<div class="codehilite"><pre><span></span><code><span class="n">mul!</span><span class="p">(</span><span class="n">xd</span><span class="p">,</span> <span class="n">M</span><span class="o">&#39;</span><span class="p">,</span> <span class="n">yd</span><span class="p">)</span>
+</code></pre></div>
+
+<p>By default, the <code>mul!</code> function dispatch on the
+sparse matrix-vector multiplication implemented in
+<a href="https://github.com/JuliaLang/julia/blob/master/stdlib/SparseArrays/src/linalg.jl#L30-L48">SparseArrays.jl</a>
+if <code>y</code> and <code>x</code> are vectors of <code>ForwardDiff.Dual{Nothing, Float64, N}</code>.
+That leads to very slow operations on the GPU (indexing issue).</p>
+<p>For that very reason, we had to implement custom (and differentiable)
+kernels to implement the <code>SpMV</code> operations on the GPU.
+The operation <code>mul!(y, M, x)</code> is easy to implement if <code>M</code> is
+a <code>CuSparseMatrixCSR</code>. In KernelAbstractions syntax, it gives</p>
+<div class="codehilite"><pre><span></span><code><span class="nd">@kernel</span> <span class="k">function</span> <span class="n">_spmm_kernel!</span><span class="p">(</span><span class="n">Y</span><span class="p">,</span> <span class="n">X</span><span class="p">,</span> <span class="n">colVal</span><span class="p">,</span> <span class="n">rowPtr</span><span class="p">,</span> <span class="n">nzVal</span><span class="p">,</span> <span class="n">alpha</span><span class="p">,</span> <span class="n">beta</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">m</span><span class="p">)</span>
+    <span class="n">i</span><span class="p">,</span> <span class="n">k</span> <span class="o">=</span> <span class="nd">@index</span><span class="p">(</span><span class="n">Global</span><span class="p">,</span> <span class="kt">NTuple</span><span class="p">)</span>
+    <span class="n">Y</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">k</span><span class="p">]</span> <span class="o">*=</span> <span class="n">beta</span>
+    <span class="nd">@inbounds</span> <span class="k">for</span> <span class="n">c</span> <span class="k">in</span> <span class="n">rowPtr</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">:</span><span class="n">rowPtr</span><span class="p">[</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">]</span><span class="o">-</span><span class="mi">1</span>
+        <span class="n">j</span> <span class="o">=</span> <span class="n">colVal</span><span class="p">[</span><span class="n">c</span><span class="p">]</span>
+        <span class="n">Y</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">k</span><span class="p">]</span> <span class="o">+=</span> <span class="n">alpha</span> <span class="o">*</span> <span class="n">nzVal</span><span class="p">[</span><span class="n">c</span><span class="p">]</span> <span class="o">*</span> <span class="n">X</span><span class="p">[</span><span class="n">j</span><span class="p">,</span> <span class="n">k</span><span class="p">]</span>
+    <span class="k">end</span>
+<span class="k">end</span>
+</code></pre></div>
+
+<p>However, the kernel associated to the tranpose operation <code>mul!(xd, M', yd)</code>
+is non trivial to implement: it is equivalent to implement the SpMV
+operation for CSC matrix, whose naive implementation leads
+to race condition in parallel environment. To alleviate this,
+we are forced to use one <code>atomic_add</code> in the kernel, which
+i) <a href="https://github.com/JuliaGPU/KernelAbstractions.jl/issues/276">is not implemented in KernelAbstractions</a>
+ii) <a href="https://github.com/JuliaGPU/CUDA.jl/blob/master/src/device/intrinsics/atomics.jl#L88-L108">does not support dual types</a>.
+We solved these two issues by writing
+directly a regular CUDA kernel and by reinterpreting
+the vectors of duals <code>xd</code> and <code>yd</code> as dense matrices
+of <code>Float64</code>. The current implementation
+can be found <a href="https://github.com/exanauts/ExaPF.jl/blob/fp/refactoring/src/cuda_wrapper.jl#L117-L157">here</a>.
+Surprisingly, the kernel associated to the tranpose operation
+is approximately 10x faster than the kernel associated to the direct
+operation.</p>
+<ul>
+<li><strong>Q5</strong>: <em>Can we optimize further our differentiable kernels for linear algebra</em>?</li>
+</ul>
+<h2>What's next?</h2>
+<p>That concludes this note introducing ExaPF's refactoring.
+We believe that the new abstraction is a net improvement
+compared to the previous version of ExaPF, and drastically
+simplifies the code. To be convinced about that last point, one just
+has to look at the current diff on <a href="https://github.com/exanauts/ExaPF.jl/pull/214">github</a>:</p>
+<div class="codehilite"><pre><span></span><code>+1,908 −4,824
+</code></pre></div>
+
+<p>The new ExaPF is closer to what we can expect from a vectorized modeler.
+We believe that we can go further in that direction by writing an algebra
+to manipulate vectorized expressions <code>AbstractExpression</code>. For instance,
+one can imagine overloading the <code>+</code> and <code>x</code> operations to compose expressions
+more easily. More to come in the coming months!</p>
+<script type="text/javascript">if (!document.getElementById('mathjaxscript_pelican_#%@#$@#')) {
+    var align = "center",
+        indent = "0em",
+        linebreak = "false";
+
+    if (false) {
+        align = (screen.width < 768) ? "left" : align;
+        indent = (screen.width < 768) ? "0em" : indent;
+        linebreak = (screen.width < 768) ? 'true' : linebreak;
+    }
+
+    var mathjaxscript = document.createElement('script');
+    mathjaxscript.id = 'mathjaxscript_pelican_#%@#$@#';
+    mathjaxscript.type = 'text/javascript';
+    mathjaxscript.src = 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.3/latest.js?config=TeX-AMS-MML_HTMLorMML';
+
+    var configscript = document.createElement('script');
+    configscript.type = 'text/x-mathjax-config';
+    configscript[(window.opera ? "innerHTML" : "text")] =
+        "MathJax.Hub.Config({" +
+        "    config: ['MMLorHTML.js']," +
+        "    TeX: { extensions: ['AMSmath.js','AMSsymbols.js','noErrors.js','noUndefined.js'], equationNumbers: { autoNumber: 'none' } }," +
+        "    jax: ['input/TeX','input/MathML','output/HTML-CSS']," +
+        "    extensions: ['tex2jax.js','mml2jax.js','MathMenu.js','MathZoom.js']," +
+        "    displayAlign: '"+ align +"'," +
+        "    displayIndent: '"+ indent +"'," +
+        "    showMathMenu: true," +
+        "    messageStyle: 'normal'," +
+        "    tex2jax: { " +
+        "        inlineMath: [ ['\\\\(','\\\\)'] ], " +
+        "        displayMath: [ ['$$','$$'] ]," +
+        "        processEscapes: true," +
+        "        preview: 'TeX'," +
+        "    }, " +
+        "    'HTML-CSS': { " +
+        "        availableFonts: ['STIX', 'TeX']," +
+        "        preferredFont: 'STIX'," +
+        "        styles: { '.MathJax_Display, .MathJax .mo, .MathJax .mi, .MathJax .mn': {color: 'inherit ! important'} }," +
+        "        linebreaks: { automatic: "+ linebreak +", width: '90% container' }," +
+        "    }, " +
+        "}); " +
+        "if ('default' !== 'default') {" +
+            "MathJax.Hub.Register.StartupHook('HTML-CSS Jax Ready',function () {" +
+                "var VARIANT = MathJax.OutputJax['HTML-CSS'].FONTDATA.VARIANT;" +
+                "VARIANT['normal'].fonts.unshift('MathJax_default');" +
+                "VARIANT['bold'].fonts.unshift('MathJax_default-bold');" +
+                "VARIANT['italic'].fonts.unshift('MathJax_default-italic');" +
+                "VARIANT['-tex-mathit'].fonts.unshift('MathJax_default-italic');" +
+            "});" +
+            "MathJax.Hub.Register.StartupHook('SVG Jax Ready',function () {" +
+                "var VARIANT = MathJax.OutputJax.SVG.FONTDATA.VARIANT;" +
+                "VARIANT['normal'].fonts.unshift('MathJax_default');" +
+                "VARIANT['bold'].fonts.unshift('MathJax_default-bold');" +
+                "VARIANT['italic'].fonts.unshift('MathJax_default-italic');" +
+                "VARIANT['-tex-mathit'].fonts.unshift('MathJax_default-italic');" +
+            "});" +
+        "}";
+
+    (document.body || document.getElementsByTagName('head')[0]).appendChild(configscript);
+    (document.body || document.getElementsByTagName('head')[0]).appendChild(mathjaxscript);
+}
+</script>
+	</div>
+	<div id="back-to-home"><a href="/">&laquo; Back to Home</a></div>
+			<hr>
+		</article>
+
+		<footer>
+			<p>Powered by <a href="http://getpelican.com">Pelican</a> and <a href="http://pages.github.com">GitHub&nbsp;Pages</a>.</p>
+		</footer>
+	</div>
+
+
+</body>
+</html>
