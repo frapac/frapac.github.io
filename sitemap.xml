@@ -2,8 +2,20 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 
 <url>
+    <loc>https://frapac.github.io/pages/news/index.html</loc>
+    <lastmod>2025-01-30</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+</url>
+<url>
     <loc>https://frapac.github.io/index.html</loc>
-    <lastmod>2024-10-13</lastmod>
+    <lastmod>2025-01-30</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+</url>
+<url>
+    <loc>https://frapac.github.io/pages/articles/index.html</loc>
+    <lastmod>2025-01-30</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
 </url>
@@ -14,26 +26,26 @@
     <priority>0.5</priority>
 </url>
 <url>
+    <loc>https://frapac.github.io/pages/talks/index.html</loc>
+    <lastmod>2024-12-18</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+</url>
+<url>
     <loc>https://frapac.github.io/pages/teaching/index.html</loc>
     <lastmod>2024-10-13</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
 </url>
 <url>
-    <loc>https://frapac.github.io/pages/news/index.html</loc>
-    <lastmod>2024-10-13</lastmod>
+    <loc>https://frapac.github.io/pages/course/pslweek/index.html</loc>
+    <lastmod>2024-11-18</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
 </url>
 <url>
-    <loc>https://frapac.github.io/pages/articles/index.html</loc>
-    <lastmod>2024-10-13</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.5</priority>
-</url>
-<url>
-    <loc>https://frapac.github.io/pages/talks/index.html</loc>
-    <lastmod>2024-10-13</lastmod>
+    <loc>https://frapac.github.io/pages/course/pslweek/battery/</loc>
+    <lastmod>2024-11-18</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
 </url>
