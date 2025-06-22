@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Tutorial 4: Optimal Power Flow · Powertech tutorial</title><meta name="title" content="Tutorial 4: Optimal Power Flow · Powertech tutorial"/><meta property="og:title" content="Tutorial 4: Optimal Power Flow · Powertech tutorial"/><meta property="twitter:title" content="Tutorial 4: Optimal Power Flow · Powertech tutorial"/><meta name="description" content="Documentation for Powertech tutorial."/><meta property="og:description" content="Documentation for Powertech tutorial."/><meta property="twitter:description" content="Documentation for Powertech tutorial."/><script data-outdated-warner src="assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="assets/documenter.js"></script><script src="search_index.js"></script><script src="siteinfo.js"></script><script src="../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="assets/themeswap.js"></script><link href="assets/favicon.ico" rel="icon" type="image/x-icon"/></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="index.html">Powertech tutorial</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="index.html">Home</a></li><li><a class="tocitem" href="0-crashcourse.html">Getting Started</a></li><li><a class="tocitem" href="1-powerflow.html">Tutorial 1: Power Flow</a></li><li><a class="tocitem" href="2-block-powerflow.html">Tutorial 2: Block Power Flow</a></li><li><a class="tocitem" href="3-constrained-powerflow.html">Tutorial 3: Constrained Power Flow</a></li><li class="is-active"><a class="tocitem" href="4-optimal-powerflow.html">Tutorial 4: Optimal Power Flow</a><ul class="internal"><li><a class="tocitem" href="#Optimal-power-flow-model"><span>Optimal power flow model</span></a></li><li><a class="tocitem" href="#Solving-optimal-power-flow-on-the-GPU"><span>Solving optimal power flow on the GPU</span></a></li></ul></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li class="is-active"><a href="4-optimal-powerflow.html">Tutorial 4: Optimal Power Flow</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href="4-optimal-powerflow.html">Tutorial 4: Optimal Power Flow</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/MadNLP/exa-models-tutorial/" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/MadNLP/exa-models-tutorial//blob/master/4-optimal-powerflow.jl" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Tutorial-4:-solving-optimal-power-flow-with-MadNLP"><a class="docs-heading-anchor" href="#Tutorial-4:-solving-optimal-power-flow-with-MadNLP">Tutorial 4: solving optimal power flow with MadNLP</a><a id="Tutorial-4:-solving-optimal-power-flow-with-MadNLP-1"></a><a class="docs-heading-anchor-permalink" href="#Tutorial-4:-solving-optimal-power-flow-with-MadNLP" title="Permalink"></a></h1><p>With the previous tutorial, we have now all the elements to implement the optimal power flow problem with MadNLP. It remains to add to the model the following elements:</p><ul><li>an objective penalizing the cost to run each power generator.</li><li>line flow constraints;</li><li>voltage angle constraints;</li></ul><p>We start the tutorial again by importing the usual packages:</p><pre><code class="language-julia hljs">using LinearAlgebra
+using SparseArrays
+
+using NLPModels
+using ExaModels
+
+using JLD2
+
+include(&quot;utils.jl&quot;)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">get_block_reordering (generic function with 1 method)</code></pre><p>We import a small instance:</p><pre><code class="language-julia hljs">DATA_DIR = &quot;/home/fpacaud/dev/examodels-tutorials/instances&quot;
+data = JLD2.load(joinpath(DATA_DIR, &quot;case9.jld2&quot;))[&quot;data&quot;]
+ngen = length(data.gen)
+nbus = length(data.bus)
+nlines = length(data.branch)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">9</code></pre><h2 id="Optimal-power-flow-model"><a class="docs-heading-anchor" href="#Optimal-power-flow-model">Optimal power flow model</a><a id="Optimal-power-flow-model-1"></a><a class="docs-heading-anchor-permalink" href="#Optimal-power-flow-model" title="Permalink"></a></h2><p>We implement the AC optimal power flow problem using ExaModels in the following function <code>acopf_model</code>:</p><pre><code class="language-julia hljs">function acopf_model(
+    data;
+    backend = nothing,
+    T = Float64,
+    kwargs...,
+)
+    w = ExaModels.ExaCore(T; backend = backend)
+    va = ExaModels.variable(w, length(data.bus))
+    vm = ExaModels.variable(
+        w,
+        length(data.bus);
+        start = data.vm0,
+        lvar = data.vmin,
+        uvar = data.vmax,
+    )
+    pg = ExaModels.variable(w, length(data.gen); start=data.pg0, lvar = data.pmin, uvar = data.pmax)
+    qg = ExaModels.variable(w, length(data.gen); start=data.qg0, lvar = data.qmin, uvar = data.qmax)
+    p = ExaModels.variable(w, length(data.arc); lvar = -data.rate_a, uvar = data.rate_a)
+    q = ExaModels.variable(w, length(data.arc); lvar = -data.rate_a, uvar = data.rate_a)
+
+    o = ExaModels.objective(
+        w,
+        g.cost1 * pg[g.i]^2 + g.cost2 * pg[g.i] + g.cost3 for g in data.gen
+    )
+
+    c1 = ExaModels.constraint(w, va[i] for i in data.ref_buses)
+
+    # Active power flow, FR
+    c2 = ExaModels.constraint(
+        w,
+        p[b.f_idx] - b.c5 * vm[b.f_bus]^2 -
+        b.c3 * (vm[b.f_bus] * vm[b.t_bus] * cos(va[b.f_bus] - va[b.t_bus])) -
+        b.c4 * (vm[b.f_bus] * vm[b.t_bus] * sin(va[b.f_bus] - va[b.t_bus])) for
+        b in data.branch
+    )
+    # Reactive power flow, FR
+    c3 = ExaModels.constraint(
+        w,
+        q[b.f_idx] +
+        b.c6 * vm[b.f_bus]^2 +
+        b.c4 * (vm[b.f_bus] * vm[b.t_bus] * cos(va[b.f_bus] - va[b.t_bus])) -
+        b.c3 * (vm[b.f_bus] * vm[b.t_bus] * sin(va[b.f_bus] - va[b.t_bus])) for
+        b in data.branch
+    )
+    # Active power flow, TO
+    c4 = ExaModels.constraint(
+        w,
+        p[b.t_idx] - b.c7 * vm[b.t_bus]^2 -
+        b.c1 * (vm[b.t_bus] * vm[b.f_bus] * cos(va[b.t_bus] - va[b.f_bus])) -
+        b.c2 * (vm[b.t_bus] * vm[b.f_bus] * sin(va[b.t_bus] - va[b.f_bus])) for
+        b in data.branch
+    )
+    # Reactive power flow, TO
+    c5 = ExaModels.constraint(
+        w,
+        q[b.t_idx] +
+        b.c8 * vm[b.t_bus]^2 +
+        b.c2 * (vm[b.t_bus] * vm[b.f_bus] * cos(va[b.t_bus] - va[b.f_bus])) -
+        b.c1 * (vm[b.t_bus] * vm[b.f_bus] * sin(va[b.t_bus] - va[b.f_bus])) for
+        b in data.branch
+    )
+
+    # Voltage angle difference
+    c6 = ExaModels.constraint(
+        w,
+        va[b.f_bus] - va[b.t_bus] for b in data.branch;
+        lcon = data.angmin,
+        ucon = data.angmax,
+    )
+    # Line flow constraints
+    c7 = ExaModels.constraint(
+        w,
+        p[b.f_idx]^2 + q[b.f_idx]^2 - b.rate_a_sq for b in data.branch;
+        lcon = fill!(similar(data.branch, Float64, length(data.branch)), -Inf),
+    )
+    c8 = ExaModels.constraint(
+        w,
+        p[b.t_idx]^2 + q[b.t_idx]^2 - b.rate_a_sq for b in data.branch;
+        lcon = fill!(similar(data.branch, Float64, length(data.branch)), -Inf),
+    )
+
+    # Active power balance
+    c9 = ExaModels.constraint(w, b.pd + b.gs * vm[b.i]^2 for b in data.bus)
+    c11 = ExaModels.constraint!(w, c9, a.bus =&gt; p[a.i] for a in data.arc)
+    c13 = ExaModels.constraint!(w, c9, g.bus =&gt; -pg[g.i] for g in data.gen)
+    # Reactive power balance
+    c10 = ExaModels.constraint(w, b.qd - b.bs * vm[b.i]^2 for b in data.bus)
+    c12 = ExaModels.constraint!(w, c10, a.bus =&gt; q[a.i] for a in data.arc)
+    c14 = ExaModels.constraint!(w, c10, g.bus =&gt; -qg[g.i] for g in data.gen)
+
+    return ExaModels.ExaModel(w; kwargs...)
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">acopf_model (generic function with 1 method)</code></pre><p>Before diving into the solution on the GPU, we show how to solve <code>case9</code> using MadNLP:</p><pre><code class="language-julia hljs">using MadNLP
+
+nlp = acopf_model(data)
+results = madnlp(nlp)
+nothing</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">This is MadNLP version v0.8.7, running with umfpack
+
+Number of nonzeros in constraint Jacobian............:      295
+Number of nonzeros in Lagrangian Hessian.............:      417
+
+Total number of variables............................:       60
+                     variables with only lower bounds:        0
+                variables with lower and upper bounds:       51
+                     variables with only upper bounds:        0
+Total number of equality constraints.................:       55
+Total number of inequality constraints...............:       27
+        inequality constraints with only lower bounds:        0
+   inequality constraints with lower and upper bounds:        9
+        inequality constraints with only upper bounds:       18
+
+iter    objective    inf_pr   inf_du lg(mu)  ||d||  lg(rg) alpha_du alpha_pr  ls
+   0  5.4455294e+03 1.63e+00 3.93e+00  -1.0 0.00e+00    -  0.00e+00 0.00e+00   0
+   1  5.2194864e+03 1.70e+00 3.27e+00  -1.0 1.30e+00    -  6.68e-01 1.00e+00h  1
+   2  5.3060363e+03 1.89e-02 2.92e-01  -1.0 1.79e+00    -  1.00e+00 1.00e+00h  1
+   3  5.3024154e+03 1.87e-03 4.62e-02  -1.7 4.32e-02    -  1.00e+00 1.00e+00h  1
+   4  5.2970878e+03 2.91e-03 4.27e-02  -2.5 4.33e-02    -  1.00e+00 1.00e+00h  1
+   5  5.2968997e+03 1.39e-04 1.11e-03  -2.5 1.18e-02    -  1.00e+00 1.00e+00h  1
+   6  5.2967027e+03 2.38e-04 1.88e-01  -3.8 1.86e-02    -  1.00e+00 7.70e-01h  1
+   7  5.2967013e+03 6.26e-05 9.52e-03  -3.8 7.91e-03    -  9.89e-01 1.00e+00h  1
+   8  5.2966993e+03 3.99e-06 1.02e-05  -3.8 2.00e-03    -  1.00e+00 1.00e+00h  1
+   9  5.2966867e+03 3.81e-06 4.63e-03  -8.6 1.99e-03    -  9.96e-01 9.57e-01h  1
+iter    objective    inf_pr   inf_du lg(mu)  ||d||  lg(rg) alpha_du alpha_pr  ls
+  10  5.2966862e+03 1.77e-07 9.17e-06  -8.6 4.17e-04    -  1.00e+00 9.99e-01h  1
+  11  5.2966862e+03 1.14e-10 3.97e-10  -8.6 1.07e-05    -  1.00e+00 1.00e+00h  1
+
+Number of Iterations....: 11
+
+                                   (scaled)                 (unscaled)
+Objective...............:   1.8321294370256518e+02    5.2966862024411594e+03
+Dual infeasibility......:   3.9659065558777334e-10    1.1465435853042529e-08
+Constraint violation....:   1.1385825615661815e-10    1.1385825615661815e-10
+Complementarity.........:   1.0214318304728503e-10    2.9529594218970105e-09
+Overall NLP error.......:   2.9529594218970105e-09    2.9529594218970105e-09
+
+Number of objective function evaluations             = 12
+Number of objective gradient evaluations             = 12
+Number of constraint evaluations                     = 12
+Number of constraint Jacobian evaluations            = 12
+Number of Lagrangian Hessian evaluations             = 11
+Total wall-clock secs in solver (w/o fun. eval./lin. alg.)  =  0.001
+Total wall-clock secs in linear solver                      =  0.002
+Total wall-clock secs in NLP function evaluations           =  0.000
+Total wall-clock secs                                       =  0.003
+
+EXIT: Optimal Solution Found (tol = 1.0e-08).</code></pre><h2 id="Solving-optimal-power-flow-on-the-GPU"><a class="docs-heading-anchor" href="#Solving-optimal-power-flow-on-the-GPU">Solving optimal power flow on the GPU</a><a id="Solving-optimal-power-flow-on-the-GPU-1"></a><a class="docs-heading-anchor-permalink" href="#Solving-optimal-power-flow-on-the-GPU" title="Permalink"></a></h2><p>For solving the optimal power flow model on the GPU, the set-up is similar to what we have detailed in the tutorial 3. We start by importing MadNLPGPU, and we instantiate a new optimal power flow instance on the GPU:</p><pre><code class="language-julia hljs">using CUDA
+using MadNLPGPU
+
+nlp_gpu = acopf_model(data; backend=CUDABackend())</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">An ExaModel{Float64, CUDA.CuArray{Float64, 1, CUDA.DeviceMemory}, ...}
+
+  Problem name: Generic
+   All variables: ████████████████████ 60     All constraints: ████████████████████ 82    
+            free: ███⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅ 9                 free: ⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅ 0     
+           lower: ⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅ 0                lower: ⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅ 0     
+           upper: ⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅ 0                upper: █████⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅ 18    
+         low/upp: █████████████████⋅⋅⋅ 51             low/upp: ███⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅ 9     
+           fixed: ⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅ 0                fixed: ██████████████⋅⋅⋅⋅⋅⋅ 55    
+          infeas: ⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅ 0               infeas: ⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅ 0     
+            nnzh: ( 77.21% sparsity)   417             linear: ⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅ 0     
+                                                    nonlinear: ████████████████████ 82    
+                                                         nnzj: ( 94.00% sparsity)   295   
+
+</code></pre><p>Solving the problem using cuDSS simply amounts to</p><pre><code class="language-julia hljs">results = madnlp(nlp_gpu)
+nothing</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">This is MadNLP version v0.8.7, running with cuDSS v0.4.0
+
+Number of nonzeros in constraint Jacobian............:      295
+Number of nonzeros in Lagrangian Hessian.............:      417
+
+Total number of variables............................:       60
+                     variables with only lower bounds:        0
+                variables with lower and upper bounds:       51
+                     variables with only upper bounds:        0
+Total number of equality constraints.................:       55
+Total number of inequality constraints...............:       27
+        inequality constraints with only lower bounds:        0
+   inequality constraints with lower and upper bounds:        9
+        inequality constraints with only upper bounds:       18
+
+iter    objective    inf_pr   inf_du lg(mu)  ||d||  lg(rg) alpha_du alpha_pr  ls
+   0  5.4455294e+03 1.63e+00 1.00e+02  -1.0 0.00e+00    -  0.00e+00 0.00e+00   0
+   1  5.4455293e+03 1.63e+00 9.28e-03  -1.0 1.44e+00    -  6.45e-01 2.00e-07h  2
+   2  5.2160816e+03 1.79e+00 1.92e-03  -1.0 1.34e+00    -  9.02e-01 1.00e+00h  1
+   3  5.3044009e+03 1.27e-02 1.90e-04  -1.0 1.79e+00  -2.0 1.00e+00 1.00e+00h  1
+   4  5.2983672e+03 4.91e-03 1.07e-03  -3.8 7.00e-02    -  7.50e-01 1.00e+00h  1
+   5  5.2970665e+03 1.71e-03 1.43e-03  -3.8 4.13e-02    -  9.50e-01 1.00e+00h  1
+   6  5.2967594e+03 8.70e-04 1.56e-02  -3.8 1.45e-02    -  1.00e+00 5.15e-01h  1
+   7  5.2966905e+03 3.08e-04 7.86e-03  -3.8 1.54e-02    -  1.00e+00 8.00e-01h  1
+   8  5.2966992e+03 3.56e-05 2.56e-06  -3.8 5.97e-03    -  1.00e+00 1.00e+00h  1
+
+Number of Iterations....: 8
+
+                                   (scaled)                 (unscaled)
+Objective...............:   1.8321339252013581e+02    5.2966991777571266e+03
+Dual infeasibility......:   2.5608338176092529e-06    7.4033705667083511e-05
+Constraint violation....:   3.5633090095466002e-05    3.5633090095466002e-05
+Complementarity.........:   2.1571604086831969e-07    6.2363507415031224e-06
+Overall NLP error.......:   3.5633090095466002e-05    3.5633090095466002e-05
+
+Number of objective function evaluations             = 10
+Number of objective gradient evaluations             = 9
+Number of constraint evaluations                     = 10
+Number of constraint Jacobian evaluations            = 9
+Number of Lagrangian Hessian evaluations             = 8
+Total wall-clock secs in solver (w/o fun. eval./lin. alg.)  =  0.051
+Total wall-clock secs in linear solver                      =  0.009
+Total wall-clock secs in NLP function evaluations           =  0.006
+Total wall-clock secs                                       =  0.066
+
+EXIT: Optimal Solution Found (tol = 1.0e-04).</code></pre><p>The instance <code>case9</code> is too small to get any significant speed-up compared to the CPU. However, we can solve a larger instance just by importing new data: For instance, to solve the case <code>10000_goc</code>:</p><pre><code class="language-julia hljs">data = JLD2.load(joinpath(DATA_DIR, &quot;pglib_opf_case10000_goc.jld2&quot;))[&quot;data&quot;]
+nlp_gpu = acopf_model(data; backend=CUDABackend())
+results = madnlp(nlp_gpu)
+nothing</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">This is MadNLP version v0.8.7, running with cuDSS v0.4.0
+
+Number of nonzeros in constraint Jacobian............:   419823
+Number of nonzeros in Lagrangian Hessian.............:   602508
+
+Total number of variables............................:    76804
+                     variables with only lower bounds:        0
+                variables with lower and upper bounds:    66804
+                     variables with only upper bounds:        0
+Total number of equality constraints.................:    72773
+Total number of inequality constraints...............:    39579
+        inequality constraints with only lower bounds:        0
+   inequality constraints with lower and upper bounds:    13193
+        inequality constraints with only upper bounds:    26386
+
+iter    objective    inf_pr   inf_du lg(mu)  ||d||  lg(rg) alpha_du alpha_pr  ls
+   0  3.0503288e+06 8.97e+00 1.00e+02  -1.0 0.00e+00    -  0.00e+00 0.00e+00   0
+   1  3.0503288e+06 8.97e+00 4.39e-02  -1.0 1.99e+01    -  5.52e-02 2.71e-08h  1
+   2  2.7096544e+06 8.10e+00 1.44e-02  -1.0 1.82e+01  -4.0 1.02e-01 9.77e-02h  1
+   3  2.3710681e+06 8.31e+00 4.77e-03  -1.0 7.04e+01  -4.5 2.86e-01 1.24e-01h  1
+   4  2.1763776e+06 1.17e+01 5.00e-03  -1.0 1.74e+02  -5.0 4.88e-01 1.03e-01h  1
+   5  1.8959831e+06 3.27e+01 3.67e-03  -1.0 2.97e+02  -5.4 3.42e-01 2.10e-01h  1
+   6  1.7928039e+06 3.43e+01 3.04e-03  -1.0 4.33e+02  -5.9 1.65e-01 1.33e-01h  1
+   7  1.7396105e+06 3.34e+01 2.47e-03  -1.0 4.65e+02  -6.4 2.01e-01 9.07e-02h  1
+   8  1.6835998e+06 3.27e+01 2.26e-03  -1.0 4.84e+02  -6.9 6.79e-02 1.16e-01h  1
+   9  1.6573579e+06 3.13e+01 1.59e-03  -1.0 4.72e+02  -7.3 2.59e-01 6.63e-02h  1
+iter    objective    inf_pr   inf_du lg(mu)  ||d||  lg(rg) alpha_du alpha_pr  ls
+  10  1.5851210e+06 3.24e+01 1.08e-03  -1.0 4.87e+02  -7.8 2.82e-01 2.11e-01h  1
+  11  1.5637384e+06 3.04e+01 7.51e-04  -1.0 4.51e+02  -8.3 2.66e-01 8.72e-02h  1
+  12  1.5156529e+06 2.83e+01 6.54e-04  -1.0 4.32e+02  -8.8 3.50e-01 2.24e-01h  1
+  13  1.4984708e+06 2.57e+01 1.54e-03  -1.0 3.43e+02  -9.2 2.80e-01 1.12e-01h  1
+  14  1.4797928e+06 2.25e+01 3.94e-03  -1.0 2.67e+02  -9.7 4.17e-01 1.48e-01h  1
+  15  1.4649900e+06 1.96e+01 4.89e-03  -1.0 2.22e+02 -10.2 3.62e-01 1.44e-01h  1
+  16  1.4415925e+06 1.50e+01 3.68e-03  -1.0 1.89e+02 -10.7 3.05e-01 2.76e-01h  1
+  17  1.4244187e+06 1.11e+01 3.60e-03  -1.0 1.38e+02 -11.2 5.87e-01 2.95e-01h  1
+  18  1.4154664e+06 8.69e+00 3.86e-03  -1.0 1.05e+02 -11.6 8.21e-01 2.30e-01h  1
+  19  1.3959795e+06 7.25e+00 2.06e-03  -1.0 9.12e+01 -12.1 9.90e-01 6.88e-01h  1
+iter    objective    inf_pr   inf_du lg(mu)  ||d||  lg(rg) alpha_du alpha_pr  ls
+  20  1.3897579e+06 3.12e+00 2.89e-03  -1.0 2.84e+01 -12.6 1.00e+00 7.59e-01h  1
+  21  1.3878610e+06 2.20e-01 4.42e-06  -1.0 6.04e+00 -13.1 1.00e+00 1.00e+00h  1
+  22  1.3770505e+06 1.20e+00 4.45e-03  -1.7 1.11e+02 -13.5 6.59e-01 5.61e-01h  1
+  23  1.3703370e+06 1.68e+00 1.96e-03  -1.7 1.10e+02 -14.0 5.32e-01 5.58e-01h  1
+  24  1.3666681e+06 1.19e+00 1.12e-03  -1.7 7.10e+01 -14.5 5.67e-01 5.66e-01h  1
+  25  1.3649877e+06 6.18e-01 7.80e-04  -1.7 3.34e+01 -15.0 4.68e-01 5.63e-01h  1
+  26  1.3635980e+06 6.04e-02 4.68e-03  -1.7 1.50e+01 -15.5 4.17e-01 1.00e+00h  1
+  27  1.3625195e+06 7.77e-02 1.81e-03  -2.5 7.41e+01 -15.9 2.35e-01 1.49e-01h  1
+  28  1.3607283e+06 1.39e-01 1.62e-02  -2.5 6.70e+01 -16.4 4.56e-01 2.72e-01h  1
+  29  1.3599915e+06 1.30e-01 2.05e-02  -2.5 4.71e+01 -16.9 2.18e-01 1.44e-01h  1
+iter    objective    inf_pr   inf_du lg(mu)  ||d||  lg(rg) alpha_du alpha_pr  ls
+  30  1.3592891e+06 1.16e-01 4.42e-02  -2.5 3.46e+01 -17.4 4.70e-01 1.66e-01h  1
+  31  1.3585842e+06 1.09e-01 3.64e-02  -2.5 2.69e+01 -17.8 1.35e-01 1.93e-01h  1
+  32  1.3577689e+06 1.88e-01 3.29e-02  -2.5 2.09e+01 -18.3 3.15e-01 2.74e-01h  1
+  33  1.3565842e+06 5.03e-01 1.67e-02  -2.5 1.23e+01 -18.8 4.71e-01 5.36e-01h  1
+  34  1.3562694e+06 3.91e-01 1.66e-02  -2.5 4.57e+00 -19.3 4.46e-01 3.02e-01h  1
+  35  1.3558235e+06 2.64e-01 1.42e-02  -2.5 2.76e+00 -19.7 1.00e+00 6.17e-01h  1
+  36  1.3555588e+06 5.54e-02 5.88e-06  -2.5 1.79e+00 -20.0 1.00e+00 1.00e+00h  1
+  37  1.3555597e+06 4.07e-03 5.15e-07  -2.5 2.82e-01 -20.0 1.00e+00 1.00e+00h  1
+  38  1.3552721e+06 8.37e-02 1.20e-02  -3.8 1.10e+01 -20.0 3.12e-01 1.96e-01f  1
+  39  1.3550470e+06 1.44e-01 5.83e-02  -3.8 1.06e+01 -20.0 4.79e-01 1.88e-01h  1
+iter    objective    inf_pr   inf_du lg(mu)  ||d||  lg(rg) alpha_du alpha_pr  ls
+  40  1.3547590e+06 2.47e-01 7.70e-02  -3.8 5.46e+00 -20.0 3.97e-01 2.87e-01h  1
+  41  1.3545528e+06 3.26e-01 6.07e-02  -3.8 5.27e+00 -20.0 2.29e-01 2.90e-01h  1
+  42  1.3544195e+06 3.17e-01 8.40e-02  -3.8 4.34e+00 -20.0 4.28e-01 2.68e-01h  1
+  43  1.3543253e+06 2.77e-01 1.13e-01  -3.8 3.43e+00 -20.0 4.27e-01 2.62e-01h  1
+  44  1.3543042e+06 2.56e-01 1.56e+00  -3.8 2.97e+00 -20.0 8.12e-01 8.50e-02h  1
+  45  1.3542029e+06 1.97e-01 8.50e-01  -3.8 2.89e+00 -20.0 7.82e-01 4.54e-01h  1
+  46  1.3541462e+06 1.10e-01 5.26e-01  -3.8 1.44e+00 -20.0 1.00e+00 5.05e-01h  1
+  47  1.3541022e+06 8.36e-02 7.34e-02  -3.8 7.11e-01 -20.0 1.00e+00 8.65e-01h  1
+  48  1.3540972e+06 8.78e-03 7.96e-06  -3.8 1.66e-01 -20.0 1.00e+00 1.00e+00h  1
+  49  1.3540970e+06 2.62e-04 1.47e-06  -3.8 1.08e-01 -20.0 1.00e+00 1.00e+00h  1
+iter    objective    inf_pr   inf_du lg(mu)  ||d||  lg(rg) alpha_du alpha_pr  ls
+  50  1.3540872e+06 6.27e-03 1.74e-01  -5.0 1.08e+00 -20.0 5.24e-01 1.48e-01h  1
+  51  1.3540661e+06 3.34e-02 2.15e-01  -5.0 1.08e+00 -20.0 5.26e-01 3.93e-01h  1
+  52  1.3540531e+06 3.70e-02 5.49e-01  -5.0 8.62e-01 -20.0 7.98e-01 4.07e-01h  1
+  53  1.3540445e+06 3.15e-02 5.68e-01  -5.0 6.23e-01 -20.0 8.24e-01 4.66e-01h  1
+  54  1.3540368e+06 1.65e-02 1.47e-01  -5.0 3.81e-01 -20.0 1.00e+00 8.07e-01h  1
+  55  1.3540351e+06 2.62e-03 4.93e-06  -5.0 7.53e-02 -20.0 1.00e+00 1.00e+00h  1
+  56  1.3540352e+06 1.26e-04 5.24e-07  -5.0 1.12e-02 -20.0 1.00e+00 1.00e+00h  1
+  57  1.3540351e+06 2.98e-06 1.15e-08  -5.0 1.73e-03 -20.0 1.00e+00 1.00e+00h  1
+
+Number of Iterations....: 57
+
+                                   (scaled)                 (unscaled)
+Objective...............:   1.1061716860256816e+04    1.3540351493117048e+06
+Dual infeasibility......:   1.1457152975675170e-08    1.4024394256413108e-06
+Constraint violation....:   2.9804650694131851e-06    2.9804650694131851e-06
+Complementarity.........:   1.4933281863079608e-08    1.8279430573600241e-06
+Overall NLP error.......:   2.9804650694131851e-06    2.9804650694131851e-06
+
+Number of objective function evaluations             = 58
+Number of objective gradient evaluations             = 58
+Number of constraint evaluations                     = 58
+Number of constraint Jacobian evaluations            = 58
+Number of Lagrangian Hessian evaluations             = 57
+Total wall-clock secs in solver (w/o fun. eval./lin. alg.)  =  0.761
+Total wall-clock secs in linear solver                      =  1.699
+Total wall-clock secs in NLP function evaluations           =  0.135
+Total wall-clock secs                                       =  2.595
+
+EXIT: Optimal Solution Found (tol = 1.0e-04).</code></pre><hr/><p><em>This page was generated using <a href="https://github.com/fredrikekre/Literate.jl">Literate.jl</a>.</em></p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="3-constrained-powerflow.html">« Tutorial 3: Constrained Power Flow</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.13.0 on <span class="colophon-date" title="Sunday 22 June 2025 16:30">Sunday 22 June 2025</span>. Using Julia version 1.11.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
