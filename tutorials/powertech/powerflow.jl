@@ -145,7 +145,7 @@ function solve_power_flow(nlp, N=1; tol=1e-8, max_iter=10)
     return x
 end
 
-function block_power_flow_model(
+function batched_power_flow_model(
     data, K;
     backend = nothing,
     T = Float64,
@@ -260,3 +260,5 @@ function analyse_sparsity(Ji::Vi, Jj::Vi, Jx::Vx, m::Int, n::Int, m_fixed, ind_d
     return G, CuArray{Int}(coo_to_csr)
 end
 
+
+nothing
