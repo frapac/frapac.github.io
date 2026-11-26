@@ -659,7 +659,14 @@ div.title {text-align: center;}
         </div>
 
         <h1>Motivation</h1>
-<p>This project is a sequel to the tutorial on the optimal management of an energy storage. It uses the same tools: the language Julia, the modeler JuMP and the solver HiGHS.</p>
+<p>The following project is implemented in Julia, using the optimization modeler JuMP.</p>
+<ul>
+<li><p>If you are new to the Julia language, we recommend the <a href="https://jump.dev/JuMP.jl/stable/tutorials/getting_started/getting_started_with_julia/">following introduction</a>.</p>
+</li>
+<li><p>If you are new to optimization modeler, we recommend the <a href="https://jump.dev/JuMP.jl/stable/tutorials/getting_started/getting_started_with_JuMP/">following tutorial</a>.</p>
+</li>
+</ul>
+<p>Julia can be installed from <a href="https://julialang.org/downloads">the official website</a>. The source code and the data are available in this <a href="https://github.com/frapac/C1Mines-09">git repository</a>. This project is a prequel to the tutorial on the optimal management of an energy storage. It uses the same tools: the language Julia, the modeler JuMP and the solver HiGHS.</p>
 <pre><code>&#93; add Plots, JuMP, HiGHS</code></pre>
 <p>A wind producer sells its energy on the <em>day-ahead market</em>. Every day before noon, it must commit to the quantity of energy it will deliver during each hour of the following day. At that time, the wind production is not known: it is only <em>forecast</em>. The next day, any deviation between the committed quantity and the actual production is settled on the <em>balancing market</em> at an unfavorable price:</p>
 <ul>
@@ -960,7 +967,7 @@ F_t(x_t^\star) = \frac{λ_t - λ^+_t}{λ^-_t - λ^+_t} \; ,
         <div class="footer">
           <p>
             Published from <a href="wind_bidding_student.jmd">wind_bidding_student.jmd</a>
-            using <a href="http://github.com/JunoLab/Weave.jl">Weave.jl</a> v0.10.12 on 2026-11-25.
+            using <a href="http://github.com/JunoLab/Weave.jl">Weave.jl</a> v0.10.12 on 2026-11-26.
           </p>
         </div>
       </div>
